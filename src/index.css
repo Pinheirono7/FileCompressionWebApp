@@ -1,0 +1,23 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html {
+    scroll-behavior: smooth;
+  }
+  
+  body {
+    font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  }
+}
+
+@layer components {
+  .file-preview-card {
+    @apply bg-white border border-gray-200 rounded-lg p-4 transition-all duration-200 hover:shadow-md hover:border-gray-300;
+  }
+  
+  .compress-button {
+    @apply bg-primary-600 hover:bg-primary-700 text-white font-semibold py-3 px-8 rounded-lg transition-all duration-200 transform hover:scale-105 focus:outline-none focus:ring-4 focus:ring-primary-50 disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none;
+  }
+}
