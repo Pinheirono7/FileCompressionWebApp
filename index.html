@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ProCompress - Professional Image Compression</title>
+    <link rel="stylesheet" href="styles.css">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+</head>
+<body>
+    <div class="container">
+        <!-- Header -->
+        <header class="header">
+            <h1><i class="fas fa-compress-alt"></i> ProCompress</h1>
+            <p>Professional Image Compression with Real-time Quality Preview</p>
+        </header>
+
+        <!-- Main Content -->
+        <main class="main-content">
+            <!-- Upload Section -->
+            <section class="upload-section">
+                <div class="upload-zone" id="uploadZone">
+                    <div class="upload-content">
+                        <i class="fas fa-cloud-upload-alt upload-icon"></i>
+                        <h3>Drop images here or click to browse</h3>
+                        <p>Supports: JPEG, PNG, WebP (Max: 50MB per file)</p>
+                        <input type="file" id="fileInput" multiple accept="image/*" hidden>
+                        <button class="btn btn-primary" id="browseBtn">Browse Files</button>
+                    </div>
+                </div>
+                
+                <!-- Warning Toast -->
+                <div class="warning-toast" id="warningToast">
+                    <i class="fas fa-exclamation-triangle"></i>
+                    <span id="warningMessage"></span>
+                    <button class="close-toast" id="closeToast">&times;</button>
+                </div>
+            </section>
+
+            <!-- Compression Settings -->
+            <section class="settings-section" id="settingsSection">
+                <h3><i class="fas fa-cog"></i> Compression Settings</h3>
+                
+                <!-- Preset Selection -->
+                <div class="preset-group">
+                    <label>Quality Presets:</label>
+                    <div class="preset-buttons">
+                        <button class="preset-btn active" data-preset="web">Web Optimized</button>
+                        <button class="preset-btn" data-preset="balanced">Balanced</button>
+                        <button class="preset-btn" data-preset="high">High Quality</button>
+                        <button class="preset-btn" data-preset="small">Maximum Compression</button>
+                        <button class="preset-btn" data-preset="custom">Custom</button>
+                    </div>
+                </div>
+
+                <!-- Custom Settings -->
+                <div class="custom-settings" id="customSettings">
+                    <div class="setting-group">
+                        <label for="qualitySlider">Quality: <span id="qualityValue">80</span>%</label>
+                        <input type="range" id="qualitySlider" min="10" max="100" value="80" class="slider">
+                    </div>
+                    
+                    <div class="setting-group">
+                        <label for="formatSelect">Output Format:</label>
+                        <select id="formatSelect" class="select">
+                            <option value="jpeg">JPEG</option>
+                            <option value="png">PNG</option>
+                            <option value="webp">WebP</option>
+                        </select>
+                    </div>
+                </div>
+
+                <button class="btn btn-success" id="compressBtn" disabled>
+                    <i class="fas fa-compress"></i> Start Compression
+                </button>
+            </section>
+
+            <!-- File Queue -->
+            <section class="queue-section" id="queueSection">
+                <h3><i class="fas fa-list"></i> File Queue</h3>
+                <div class="file-list" id="fileList"></div>
+            </section>
+
+            <!-- Image Comparison -->
+            <section class="comparison-section" id="comparisonSection">
+                <h3><i class="fas fa-balance-scale"></i> Quality Comparison</h3>
+                <div class="comparison-container">
+                    <div class="image-viewer">
+                        <div class="comparison-wrapper">
+                            <canvas id="originalCanvas" class="comparison-canvas"></canvas>
+                            <canvas id="compressedCanvas" class="comparison-canvas"></canvas>
+                            <div class="slider-overlay">
+                                <input type="range" id="comparisonSlider" min="0" max="100" value="50" class="comparison-slider">
+                                <div class="slider-line" id="sliderLine"></div>
+                            </div>
+                        </div>
+                        <div class="image-labels">
+                            <span class="label-left">Original</span>
+                            <span class="label-right">Compressed</span>
+                        </div>
+                    </div>
+                    <div class="comparison-stats" id="comparisonStats"></div>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <!-- Progress Modal -->
+    <div class="modal" id="progressModal">
+        <div class="modal-content">
+            <h3><i class="fas fa-cog fa-spin"></i> Processing Images...</h3>
+            <div class="progress-container">
+                <div class="progress-bar">
+                    <div class="progress-fill" id="progressFill"></div>
+                </div>
+                <span class="progress-text" id="progressText">0%</span>
+            </div>
+            <div class="current-file" id="currentFile">Preparing...</div>
+        </div>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>
