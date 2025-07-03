@@ -45,11 +45,26 @@
                 <div class="preset-group">
                     <label>Quality Presets:</label>
                     <div class="preset-buttons">
-                        <button class="preset-btn active" data-preset="web">Web Optimized</button>
-                        <button class="preset-btn" data-preset="balanced">Balanced</button>
-                        <button class="preset-btn" data-preset="high">High Quality</button>
-                        <button class="preset-btn" data-preset="small">Maximum Compression</button>
-                        <button class="preset-btn" data-preset="custom">Custom</button>
+                        <button class="preset-btn active" data-preset="web">
+                            <span>Web Optimized</span>
+                            <small>80% Quality</small>
+                        </button>
+                        <button class="preset-btn" data-preset="balanced">
+                            <span>Balanced</span>
+                            <small>90% Quality</small>
+                        </button>
+                        <button class="preset-btn" data-preset="high">
+                            <span>High Quality</span>
+                            <small>95% Quality</small>
+                        </button>
+                        <button class="preset-btn" data-preset="small">
+                            <span>Maximum Compression</span>
+                            <small>60% Quality</small>
+                        </button>
+                        <button class="preset-btn" data-preset="custom">
+                            <span>Custom</span>
+                            <small>Manual Settings</small>
+                        </button>
                     </div>
                 </div>
 
@@ -78,6 +93,33 @@
             <!-- File Queue -->
             <section class="queue-section" id="queueSection">
                 <h3><i class="fas fa-list"></i> File Queue</h3>
+                
+                <!-- Batch Information -->
+                <div class="batch-info" id="batchInfo">
+                    <div class="batch-stats">
+                        <div class="batch-stat">
+                            <span class="batch-stat-value" id="totalFiles">0</span>
+                            <span class="batch-stat-label">Total Files</span>
+                        </div>
+                        <div class="batch-stat">
+                            <span class="batch-stat-value" id="pendingFiles">0</span>
+                            <span class="batch-stat-label">Pending</span>
+                        </div>
+                        <div class="batch-stat">
+                            <span class="batch-stat-value" id="completedFiles">0</span>
+                            <span class="batch-stat-label">Completed</span>
+                        </div>
+                        <div class="batch-stat">
+                            <span class="batch-stat-value" id="failedFiles">0</span>
+                            <span class="batch-stat-label">Failed</span>
+                        </div>
+                        <div class="batch-stat">
+                            <span class="batch-stat-value" id="totalSavings">0%</span>
+                            <span class="batch-stat-label">Avg. Savings</span>
+                        </div>
+                    </div>
+                </div>
+                
                 <div class="file-list" id="fileList"></div>
             </section>
 

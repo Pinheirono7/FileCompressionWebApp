@@ -4,6 +4,7 @@ class ImageCompressor {
         this.currentFileIndex = 0;
         this.isProcessing = false;
         this.maxFileSize = 50 * 1024 * 1024; // 50MB
+        this.maxBatchSize = 500 * 1024 * 1024; // 500MB total batch size
         this.supportedTypes = ['image/jpeg', 'image/png', 'image/webp'];
         this.compressionSettings = {
             quality: 0.8,
@@ -19,8 +20,16 @@ class ImageCompressor {
             custom: { quality: 0.8, format: 'jpeg' }
         };
 
+        // Batch processing configuration
+        this.batchConfig = {
+            maxConcurrent: 1, // Process one at a time to prevent memory issues
+            memoryThreshold: 0.8, // Stop if memory usage exceeds 80%
+            retryAttempts: 2
+        };
+
         this.initializeElements();
         this.bindEvents();
+        this.updateBatchStats();
     }
 
     initializeElements() {
@@ -44,6 +53,14 @@ class ImageCompressor {
         // Queue elements
         this.queueSection = document.getElementById('queueSection');
         this.fileList = document.getElementById('fileList');
+        this.batchInfo = document.getElementById('batchInfo');
+        
+        // Batch stats elements
+        this.totalFiles = document.getElementById('totalFiles');
+        this.pendingFiles = document.getElementById('pendingFiles');
+        this.completedFiles = document.getElementById('completedFiles');
+        this.failedFiles = document.getElementById('failedFiles');
+        this.totalSavings = document.getElementById('totalSavings');
         
         // Comparison elements
         this.comparisonSection = document.getElementById('comparisonSection');
@@ -82,6 +99,7 @@ class ImageCompressor {
         this.qualitySlider.addEventListener('input', (e) => {
             this.qualityValue.textContent = e.target.value;
             this.compressionSettings.quality = e.target.value / 100;
+            this.updateSliderBackground(e.target.value);
         });
         
         this.formatSelect.addEventListener('change', (e) => {
@@ -89,12 +107,25 @@ class ImageCompressor {
         });
         
         // Compression button
-        this.compressBtn.addEventListener('click', () => this.startCompression());
+        this.compressBtn.addEventListener('click', () => this.startBatchCompression());
         
-        // Comparison slider
+        // Enhanced comparison slider with better visual feedback
         this.comparisonSlider.addEventListener('input', (e) => {
             this.updateComparison(e.target.value);
         });
+        
+        this.comparisonSlider.addEventListener('mousedown', () => {
+            this.sliderLine.style.transition = 'none';
+        });
+        
+        this.comparisonSlider.addEventListener('mouseup', () => {
+            this.sliderLine.style.transition = 'left 0.1s ease';
+        });
+    }
+
+    updateSliderBackground(value) {
+        const percentage = (value - 10) / (100 - 10) * 100;
+        this.qualitySlider.style.background = `linear-gradient(to right, #e2e8f0 0%, #e2e8f0 ${percentage}%, #667eea ${percentage}%, #667eea 100%)`;
     }
 
     handleDragOver(e) {
@@ -117,6 +148,7 @@ class ImageCompressor {
     handleFileSelect(files) {
         const validFiles = [];
         const errors = [];
+        let totalBatchSize = this.getCurrentBatchSize();
 
         Array.from(files).forEach(file => {
             if (!this.supportedTypes.includes(file.type)) {
@@ -129,6 +161,12 @@ class ImageCompressor {
                 return;
             }
             
+            if (totalBatchSize + file.size > this.maxBatchSize) {
+                errors.push(`${file.name}: Would exceed batch size limit (max 500MB total)`);
+                return;
+            }
+            
+            totalBatchSize += file.size;
             validFiles.push(file);
         });
 
@@ -139,6 +177,10 @@ class ImageCompressor {
         if (validFiles.length > 0) {
             this.addFilesToQueue(validFiles);
         }
+    }
+
+    getCurrentBatchSize() {
+        return this.fileQueue.reduce((total, item) => total + item.originalSize, 0);
     }
 
     addFilesToQueue(files) {
@@ -152,7 +194,9 @@ class ImageCompressor {
                 status: 'pending',
                 preview: null,
                 originalImageData: null,
-                compressedImageData: null
+                compressedImageData: null,
+                attempts: 0,
+                error: null
             };
             
             this.fileQueue.push(fileItem);
@@ -162,6 +206,7 @@ class ImageCompressor {
         this.settingsSection.classList.add('show');
         this.queueSection.classList.add('show');
         this.compressBtn.disabled = false;
+        this.updateBatchStats();
     }
 
     async createFilePreview(fileItem) {
@@ -186,11 +231,15 @@ class ImageCompressor {
                     Original: ${this.formatFileSize(fileItem.originalSize)}
                     ${fileItem.compressedSize ? `| Compressed: ${this.formatFileSize(fileItem.compressedSize)} (${this.calculateSavings(fileItem.originalSize, fileItem.compressedSize)})` : ''}
                 </div>
+                ${fileItem.error ? `<div class="file-error">Error: ${fileItem.error}</div>` : ''}
             </div>
             <div class="file-status status-${fileItem.status}">
                 ${this.getStatusIcon(fileItem.status)} ${this.getStatusText(fileItem.status)}
             </div>
-            ${fileItem.compressedBlob ? `<button class="download-btn" onclick="compressor.downloadFile('${fileItem.id}')">Download</button>` : ''}
+            <div class="file-actions">
+                ${fileItem.compressedBlob ? `<button class="download-btn" onclick="compressor.downloadFile('${fileItem.id}')"><i class="fas fa-download"></i> Download</button>` : ''}
+                <button class="remove-btn" onclick="compressor.removeFile('${fileItem.id}')"><i class="fas fa-times"></i></button>
+            </div>
         `;
         
         this.fileList.appendChild(fileDiv);
@@ -199,23 +248,82 @@ class ImageCompressor {
     updateFileItem(fileItem) {
         const fileDiv = document.querySelector(`[data-file-id="${fileItem.id}"]`);
         if (fileDiv) {
-            fileDiv.querySelector('.file-size').innerHTML = `
+            const fileSizeDiv = fileDiv.querySelector('.file-size');
+            fileSizeDiv.innerHTML = `
                 Original: ${this.formatFileSize(fileItem.originalSize)}
                 ${fileItem.compressedSize ? `| Compressed: ${this.formatFileSize(fileItem.compressedSize)} (${this.calculateSavings(fileItem.originalSize, fileItem.compressedSize)})` : ''}
             `;
+            
+            // Update or add error message
+            const existingError = fileDiv.querySelector('.file-error');
+            if (fileItem.error) {
+                if (!existingError) {
+                    const errorDiv = document.createElement('div');
+                    errorDiv.className = 'file-error';
+                    errorDiv.textContent = `Error: ${fileItem.error}`;
+                    fileDiv.querySelector('.file-info').appendChild(errorDiv);
+                }
+            } else if (existingError) {
+                existingError.remove();
+            }
             
             const statusDiv = fileDiv.querySelector('.file-status');
             statusDiv.className = `file-status status-${fileItem.status}`;
             statusDiv.innerHTML = `${this.getStatusIcon(fileItem.status)} ${this.getStatusText(fileItem.status)}`;
             
-            if (fileItem.compressedBlob && !fileDiv.querySelector('.download-btn')) {
-                const downloadBtn = document.createElement('button');
-                downloadBtn.className = 'download-btn';
-                downloadBtn.textContent = 'Download';
-                downloadBtn.onclick = () => this.downloadFile(fileItem.id);
-                fileDiv.appendChild(downloadBtn);
+            const actionsDiv = fileDiv.querySelector('.file-actions');
+            actionsDiv.innerHTML = `
+                ${fileItem.compressedBlob ? `<button class="download-btn" onclick="compressor.downloadFile('${fileItem.id}')"><i class="fas fa-download"></i> Download</button>` : ''}
+                <button class="remove-btn" onclick="compressor.removeFile('${fileItem.id}')"><i class="fas fa-times"></i></button>
+            `;
+        }
+        
+        this.updateBatchStats();
+    }
+
+    removeFile(fileId) {
+        const index = this.fileQueue.findIndex(item => item.id == fileId);
+        if (index !== -1) {
+            this.fileQueue.splice(index, 1);
+            const fileDiv = document.querySelector(`[data-file-id="${fileId}"]`);
+            if (fileDiv) {
+                fileDiv.remove();
+            }
+            this.updateBatchStats();
+            
+            if (this.fileQueue.length === 0) {
+                this.settingsSection.classList.remove('show');
+                this.queueSection.classList.remove('show');
+                this.comparisonSection.classList.remove('show');
+                this.compressBtn.disabled = true;
             }
         }
+    }
+
+    updateBatchStats() {
+        const stats = this.calculateBatchStats();
+        
+        this.totalFiles.textContent = stats.total;
+        this.pendingFiles.textContent = stats.pending;
+        this.completedFiles.textContent = stats.completed;
+        this.failedFiles.textContent = stats.failed;
+        this.totalSavings.textContent = `${stats.averageSavings.toFixed(1)}%`;
+    }
+
+    calculateBatchStats() {
+        const total = this.fileQueue.length;
+        const pending = this.fileQueue.filter(item => item.status === 'pending').length;
+        const completed = this.fileQueue.filter(item => item.status === 'complete').length;
+        const failed = this.fileQueue.filter(item => item.status === 'error').length;
+        
+        const completedFiles = this.fileQueue.filter(item => item.status === 'complete' && item.compressedSize);
+        const totalOriginalSize = completedFiles.reduce((sum, item) => sum + item.originalSize, 0);
+        const totalCompressedSize = completedFiles.reduce((sum, item) => sum + item.compressedSize, 0);
+        
+        const averageSavings = totalOriginalSize > 0 ? 
+            ((totalOriginalSize - totalCompressedSize) / totalOriginalSize) * 100 : 0;
+        
+        return { total, pending, completed, failed, averageSavings };
     }
 
     getStatusIcon(status) {
@@ -233,7 +341,7 @@ class ImageCompressor {
             pending: 'Pending',
             processing: 'Processing...',
             complete: 'Complete',
-            error: 'Error'
+            error: 'Failed'
         };
         return texts[status] || status;
     }
@@ -270,10 +378,11 @@ class ImageCompressor {
             this.qualitySlider.value = presetSettings.quality * 100;
             this.qualityValue.textContent = Math.round(presetSettings.quality * 100);
             this.formatSelect.value = presetSettings.format;
+            this.updateSliderBackground(presetSettings.quality * 100);
         }
     }
 
-    async startCompression() {
+    async startBatchCompression() {
         if (this.isProcessing) return;
         
         this.isProcessing = true;
@@ -281,29 +390,44 @@ class ImageCompressor {
         this.showProgressModal();
         
         const pendingFiles = this.fileQueue.filter(item => item.status === 'pending');
+        let processedCount = 0;
         
         for (let i = 0; i < pendingFiles.length; i++) {
             const fileItem = pendingFiles[i];
             
             try {
                 fileItem.status = 'processing';
+                fileItem.attempts++;
                 this.updateFileItem(fileItem);
-                this.updateProgress(i, pendingFiles.length, fileItem.file.name);
+                this.updateProgress(processedCount, pendingFiles.length, fileItem.file.name);
                 
-                const compressedResult = await this.compressImage(fileItem);
+                // Memory management: Force garbage collection if available
+                if (window.gc) {
+                    window.gc();
+                }
+                
+                // Check memory usage (rough estimation)
+                if (this.checkMemoryPressure()) {
+                    await this.delay(500); // Brief pause to allow memory cleanup
+                }
+                
+                const compressedResult = await this.compressImageWithRetry(fileItem);
                 
                 fileItem.compressedBlob = compressedResult.blob;
                 fileItem.compressedSize = compressedResult.blob.size;
                 fileItem.originalImageData = compressedResult.originalImageData;
                 fileItem.compressedImageData = compressedResult.compressedImageData;
                 fileItem.status = 'complete';
+                fileItem.error = null;
                 
             } catch (error) {
-                console.error('Compression error:', error);
+                console.error('Compression error for', fileItem.file.name, ':', error);
                 fileItem.status = 'error';
+                fileItem.error = error.message || 'Compression failed';
             }
             
             this.updateFileItem(fileItem);
+            processedCount++;
         }
         
         this.updateProgress(pendingFiles.length, pendingFiles.length, 'Complete!');
@@ -317,7 +441,44 @@ class ImageCompressor {
             if (completedFile) {
                 this.showComparison(completedFile);
             }
+            
+            // Show completion notification
+            const stats = this.calculateBatchStats();
+            this.showNotification(`Batch complete! ${stats.completed} files processed, ${stats.failed} failed.`, 
+                stats.failed > 0 ? 'warning' : 'success');
         }, 1000);
+    }
+
+    async compressImageWithRetry(fileItem) {
+        let lastError;
+        
+        for (let attempt = 0; attempt < this.batchConfig.retryAttempts; attempt++) {
+            try {
+                return await this.compressImage(fileItem);
+            } catch (error) {
+                lastError = error;
+                if (attempt < this.batchConfig.retryAttempts - 1) {
+                    // Wait before retry
+                    await this.delay(1000);
+                }
+            }
+        }
+        
+        throw lastError;
+    }
+
+    checkMemoryPressure() {
+        // Rough estimation of memory pressure
+        if (performance.memory) {
+            const memoryInfo = performance.memory;
+            const usedRatio = memoryInfo.usedJSHeapSize / memoryInfo.jsHeapSizeLimit;
+            return usedRatio > this.batchConfig.memoryThreshold;
+        }
+        return false;
+    }
+
+    delay(ms) {
+        return new Promise(resolve => setTimeout(resolve, ms));
     }
 
     async compressImage(fileItem) {
@@ -373,7 +534,7 @@ class ImageCompressor {
         const img = new Image();
         img.onload = () => {
             // Resize canvases to fit container while maintaining aspect ratio
-            const maxWidth = 800;
+            const maxWidth = 900;
             const maxHeight = 600;
             let { width, height } = img;
             
@@ -404,11 +565,15 @@ class ImageCompressor {
                 this.comparisonSection.classList.add('show');
                 this.comparisonContainer.classList.add('show');
                 
-                // Update comparison
+                // Reset and update comparison
+                this.comparisonSlider.value = 50;
                 this.updateComparison(50);
                 
                 // Update stats
                 this.updateComparisonStats(fileItem);
+                
+                // Scroll to comparison section
+                this.comparisonSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
             };
             compressedImg.src = URL.createObjectURL(fileItem.compressedBlob);
         };
@@ -417,10 +582,17 @@ class ImageCompressor {
 
     updateComparison(value) {
         const percentage = value / 100;
-        const clipPath = `inset(0 ${100 - value}% 0 0)`;
         
-        this.compressedCanvas.style.clipPath = clipPath;
+        // Enhanced window wiper effect
+        this.compressedCanvas.style.clipPath = `inset(0 ${100 - value}% 0 0)`;
         this.sliderLine.style.left = `${value}%`;
+        
+        // Add visual feedback for the slider
+        this.comparisonSlider.style.background = `linear-gradient(to right, 
+            rgba(102,126,234,0.2) 0%, 
+            rgba(102,126,234,0.2) ${value}%, 
+            rgba(118,75,162,0.2) ${value}%, 
+            rgba(118,75,162,0.2) 100%)`;
     }
 
     updateComparisonStats(fileItem) {
@@ -443,6 +615,10 @@ class ImageCompressor {
             <div class="stat-item">
                 <span class="stat-value">${ratio.toFixed(1)}%</span>
                 <span class="stat-label">Compression Ratio</span>
+            </div>
+            <div class="stat-item">
+                <span class="stat-value">${this.compressionSettings.quality * 100}%</span>
+                <span class="stat-label">Quality Setting</span>
             </div>
         `;
     }
@@ -469,12 +645,19 @@ class ImageCompressor {
         setTimeout(() => URL.revokeObjectURL(link.href), 1000);
     }
 
+    downloadAllFiles() {
+        const completedFiles = this.fileQueue.filter(item => item.status === 'complete' && item.compressedBlob);
+        completedFiles.forEach(fileItem => {
+            setTimeout(() => this.downloadFile(fileItem.id), 100);
+        });
+    }
+
     showWarning(message) {
         this.warningMessage.textContent = message;
         this.warningToast.classList.add('show');
         
-        // Auto-hide after 5 seconds
-        setTimeout(() => this.hideWarning(), 5000);
+        // Auto-hide after 7 seconds
+        setTimeout(() => this.hideWarning(), 7000);
     }
 
     hideWarning() {
@@ -494,6 +677,60 @@ class ImageCompressor {
         this.progressFill.style.width = `${percentage}%`;
         this.progressText.textContent = `${Math.round(percentage)}%`;
         this.currentFile.textContent = current < total ? `Processing: ${fileName}` : fileName;
+    }
+
+    showNotification(message, type = 'info') {
+        // Create notification element
+        const notification = document.createElement('div');
+        notification.className = `notification notification-${type}`;
+        notification.innerHTML = `
+            <div class="notification-content">
+                <i class="fas fa-${type === 'success' ? 'check-circle' : type === 'error' ? 'exclamation-triangle' : type === 'warning' ? 'exclamation-triangle' : 'info-circle'}"></i>
+                <span>${message}</span>
+                <button class="notification-close">&times;</button>
+            </div>
+        `;
+        
+        // Add styles
+        notification.style.cssText = `
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background: ${type === 'success' ? '#10b981' : type === 'error' ? '#ef4444' : type === 'warning' ? '#f59e0b' : '#3b82f6'};
+            color: white;
+            padding: 1rem 1.5rem;
+            border-radius: 8px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.15);
+            z-index: 9999;
+            opacity: 0;
+            transform: translateX(100%);
+            transition: all 0.3s ease;
+            max-width: 350px;
+        `;
+        
+        document.body.appendChild(notification);
+        
+        // Close button functionality
+        notification.querySelector('.notification-close').onclick = () => {
+            notification.style.opacity = '0';
+            notification.style.transform = 'translateX(100%)';
+            setTimeout(() => notification.remove(), 300);
+        };
+        
+        // Animate in
+        setTimeout(() => {
+            notification.style.opacity = '1';
+            notification.style.transform = 'translateX(0)';
+        }, 100);
+        
+        // Remove after 5 seconds
+        setTimeout(() => {
+            if (notification.parentNode) {
+                notification.style.opacity = '0';
+                notification.style.transform = 'translateX(100%)';
+                setTimeout(() => notification.remove(), 300);
+            }
+        }, 5000);
     }
 }
 
@@ -522,7 +759,16 @@ document.addEventListener('DOMContentLoaded', () => {
             }
             compressor.hideWarning();
         }
+        
+        // Ctrl/Cmd + A to select all completed files for download
+        if ((e.ctrlKey || e.metaKey) && e.key === 'a' && compressor.fileQueue.length > 0) {
+            e.preventDefault();
+            compressor.downloadAllFiles();
+        }
     });
+    
+    // Initialize slider background
+    compressor.updateSliderBackground(compressor.qualitySlider.value);
 });
 
 // Add touch support for mobile devices
@@ -552,9 +798,70 @@ if (typeof PerformanceObserver !== 'undefined') {
     performanceObserver.observe({ entryTypes: ['measure'] });
 }
 
-// Service Worker registration for offline support (optional)
-if ('serviceWorker' in navigator) {
-    window.addEventListener('load', () => {
-        // navigator.serviceWorker.register('/sw.js'); // Uncomment if you create a service worker
+// Memory management
+window.addEventListener('beforeunload', () => {
+    // Clean up object URLs to prevent memory leaks
+    compressor.fileQueue.forEach(fileItem => {
+        if (fileItem.compressedBlob) {
+            URL.revokeObjectURL(fileItem.compressedBlob);
+        }
     });
-}
+});
+
+// Add CSS for new elements
+const additionalCSS = `
+    .file-error {
+        color: #f56565;
+        font-size: 0.8rem;
+        margin-top: 0.25rem;
+    }
+    
+    .file-actions {
+        display: flex;
+        gap: 0.5rem;
+        align-items: center;
+    }
+    
+    .remove-btn {
+        padding: 6px 8px;
+        background: #f56565;
+        color: white;
+        border: none;
+        border-radius: 4px;
+        cursor: pointer;
+        font-size: 0.8rem;
+        transition: background 0.3s ease;
+    }
+    
+    .remove-btn:hover {
+        background: #e53e3e;
+    }
+    
+    .notification-content {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+    }
+    
+    .notification-close {
+        background: none;
+        border: none;
+        color: white;
+        cursor: pointer;
+        font-size: 1.2rem;
+        margin-left: auto;
+        padding: 0 0.25rem;
+    }
+    
+    @media (max-width: 768px) {
+        .notification {
+            right: 10px;
+            left: 10px;
+            max-width: none;
+        }
+    }
+`;
+
+const styleElement = document.createElement('style');
+styleElement.textContent = additionalCSS;
+document.head.appendChild(styleElement);

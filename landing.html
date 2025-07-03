@@ -1,0 +1,297 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ProCompress - Professional Image Compression Tool</title>
+    <link rel="stylesheet" href="styles.css">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+</head>
+<body>
+    <div class="container">
+        <!-- Navigation -->
+        <nav class="navbar">
+            <div class="nav-brand">
+                <i class="fas fa-compress-alt"></i>
+                <span>ProCompress</span>
+            </div>
+            <div class="nav-menu">
+                <a href="#features" class="nav-link">Features</a>
+                <a href="#how-it-works" class="nav-link">How it Works</a>
+                <a href="#faq" class="nav-link">FAQ</a>
+                <button class="btn btn-primary" id="loginBtn">Sign In</button>
+            </div>
+        </nav>
+
+        <!-- Hero Section -->
+        <section class="landing-hero">
+            <h1>Professional Image Compression Made Simple</h1>
+            <p class="hero-subtitle">Compress your images with precision while maintaining quality. Fast, secure, and completely free.</p>
+            
+            <div class="hero-features">
+                <div class="hero-feature">
+                    <i class="fas fa-rocket"></i>
+                    <span>Lightning Fast</span>
+                </div>
+                <div class="hero-feature">
+                    <i class="fas fa-shield-alt"></i>
+                    <span>100% Secure</span>
+                </div>
+                <div class="hero-feature">
+                    <i class="fas fa-mobile-alt"></i>
+                    <span>Mobile Friendly</span>
+                </div>
+            </div>
+
+            <div class="hero-actions">
+                <button class="btn btn-primary btn-large" id="getStartedBtn">
+                    <i class="fas fa-play"></i>
+                    Get Started Free
+                </button>
+                <button class="btn btn-secondary btn-large" id="learnMoreBtn">
+                    <i class="fas fa-info-circle"></i>
+                    Learn More
+                </button>
+            </div>
+        </section>
+
+        <!-- Features Section -->
+        <section id="features" class="features-section">
+            <h2>Why Choose ProCompress?</h2>
+            <div class="feature-grid">
+                <div class="feature-card">
+                    <div class="feature-icon">
+                        <i class="fas fa-magic"></i>
+                    </div>
+                    <h3>Smart Compression</h3>
+                    <p>Advanced algorithms that reduce file size while preserving image quality. Multiple preset options for different use cases.</p>
+                </div>
+                
+                <div class="feature-card">
+                    <div class="feature-icon">
+                        <i class="fas fa-layer-group"></i>
+                    </div>
+                    <h3>Batch Processing</h3>
+                    <p>Process multiple images simultaneously with intelligent queue management to prevent memory issues.</p>
+                </div>
+                
+                <div class="feature-card">
+                    <div class="feature-icon">
+                        <i class="fas fa-balance-scale"></i>
+                    </div>
+                    <h3>Quality Comparison</h3>
+                    <p>Interactive before/after comparison with draggable slider to see the exact quality impact.</p>
+                </div>
+                
+                <div class="feature-card">
+                    <div class="feature-icon">
+                        <i class="fas fa-download"></i>
+                    </div>
+                    <h3>Instant Download</h3>
+                    <p>Download compressed images immediately with detailed file size statistics and savings information.</p>
+                </div>
+                
+                <div class="feature-card">
+                    <div class="feature-icon">
+                        <i class="fas fa-cogs"></i>
+                    </div>
+                    <h3>Customizable Settings</h3>
+                    <p>Choose from preset options or fine-tune compression with custom quality and format settings.</p>
+                </div>
+                
+                <div class="feature-card">
+                    <div class="feature-icon">
+                        <i class="fas fa-user-shield"></i>
+                    </div>
+                    <h3>Privacy Focused</h3>
+                    <p>All processing happens in your browser. Your images never leave your device for complete privacy.</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- How It Works Section -->
+        <section id="how-it-works" class="how-it-works-section">
+            <h2>How It Works</h2>
+            <div class="steps-container">
+                <div class="step">
+                    <div class="step-number">1</div>
+                    <div class="step-content">
+                        <h3>Upload Images</h3>
+                        <p>Drag and drop your images or click to browse. Supports JPEG, PNG, and WebP formats up to 50MB each.</p>
+                    </div>
+                </div>
+                
+                <div class="step">
+                    <div class="step-number">2</div>
+                    <div class="step-content">
+                        <h3>Choose Settings</h3>
+                        <p>Select from our optimized presets or customize quality and format settings to meet your specific needs.</p>
+                    </div>
+                </div>
+                
+                <div class="step">
+                    <div class="step-number">3</div>
+                    <div class="step-content">
+                        <h3>Preview & Compare</h3>
+                        <p>Use our interactive comparison tool to see the quality impact before downloading your compressed images.</p>
+                    </div>
+                </div>
+                
+                <div class="step">
+                    <div class="step-number">4</div>
+                    <div class="step-content">
+                        <h3>Download Results</h3>
+                        <p>Download your optimized images with detailed statistics showing file size reduction and compression ratios.</p>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- FAQ Section -->
+        <section id="faq" class="faq-section">
+            <h2>Frequently Asked Questions</h2>
+            
+            <div class="faq-item">
+                <div class="faq-question">Is my data secure?</div>
+                <div class="faq-answer">
+                    Yes, absolutely! All image processing happens directly in your browser using JavaScript. Your images never leave your device, ensuring complete privacy and security.
+                </div>
+            </div>
+            
+            <div class="faq-item">
+                <div class="faq-question">What file formats are supported?</div>
+                <div class="faq-answer">
+                    ProCompress supports JPEG, PNG, and WebP image formats. You can also convert between formats during compression for additional optimization.
+                </div>
+            </div>
+            
+            <div class="faq-item">
+                <div class="faq-question">What's the maximum file size limit?</div>
+                <div class="faq-answer">
+                    Each individual image can be up to 50MB. For batch processing, we recommend keeping total batch size under 500MB to ensure optimal performance.
+                </div>
+            </div>
+            
+            <div class="faq-item">
+                <div class="faq-question">How much compression can I expect?</div>
+                <div class="faq-answer">
+                    Compression results vary by image type and content. Typically, you can expect 30-70% file size reduction while maintaining good visual quality. Our presets are optimized for different use cases.
+                </div>
+            </div>
+            
+            <div class="faq-item">
+                <div class="faq-question">Can I process multiple images at once?</div>
+                <div class="faq-answer">
+                    Yes! ProCompress includes intelligent batch processing with queue management. Failed files won't affect the processing of other images in your batch.
+                </div>
+            </div>
+            
+            <div class="faq-item">
+                <div class="faq-question">Do I need to create an account?</div>
+                <div class="faq-answer">
+                    Creating an account is optional. You can use the basic compression features without signing up. Accounts provide access to additional features like compression history and custom presets.
+                </div>
+            </div>
+            
+            <div class="faq-item">
+                <div class="faq-question">Is ProCompress free?</div>
+                <div class="faq-answer">
+                    Yes, ProCompress is completely free to use. We believe in providing accessible tools for image optimization without any cost barriers.
+                </div>
+            </div>
+        </section>
+
+        <!-- Footer -->
+        <footer class="footer">
+            <div class="footer-content">
+                <div class="footer-section">
+                    <h4>ProCompress</h4>
+                    <p>Professional image compression made simple and accessible for everyone.</p>
+                </div>
+                <div class="footer-section">
+                    <h4>Features</h4>
+                    <ul>
+                        <li>Batch Processing</li>
+                        <li>Quality Preview</li>
+                        <li>Multiple Formats</li>
+                        <li>Privacy Focused</li>
+                    </ul>
+                </div>
+                <div class="footer-section">
+                    <h4>Support</h4>
+                    <ul>
+                        <li><a href="#faq">FAQ</a></li>
+                        <li><a href="mailto:support@procompress.com">Contact</a></li>
+                        <li><a href="/privacy">Privacy Policy</a></li>
+                        <li><a href="/terms">Terms of Service</a></li>
+                    </ul>
+                </div>
+            </div>
+            <div class="footer-bottom">
+                <p>&copy; 2024 ProCompress. All rights reserved.</p>
+            </div>
+        </footer>
+    </div>
+
+    <!-- Auth Modal -->
+    <div class="modal" id="authModal">
+        <div class="modal-content">
+            <div class="auth-container">
+                <button class="close-modal" id="closeAuthModal">&times;</button>
+                
+                <!-- Login Form -->
+                <div class="auth-section" id="loginSection">
+                    <h2>Welcome Back</h2>
+                    <p>Sign in to access your compression history and custom presets.</p>
+                    
+                    <form class="auth-form" id="loginForm">
+                        <div class="form-group">
+                            <label for="loginEmail">Email</label>
+                            <input type="email" id="loginEmail" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="loginPassword">Password</label>
+                            <input type="password" id="loginPassword" required>
+                        </div>
+                        <button type="submit" class="btn btn-primary btn-full">Sign In</button>
+                    </form>
+                    
+                    <p class="auth-switch">
+                        Don't have an account? 
+                        <button class="link-btn" id="showSignupBtn">Create one</button>
+                    </p>
+                </div>
+                
+                <!-- Signup Form -->
+                <div class="auth-section" id="signupSection" style="display: none;">
+                    <h2>Get Started</h2>
+                    <p>Create your free account to unlock additional features.</p>
+                    
+                    <form class="auth-form" id="signupForm">
+                        <div class="form-group">
+                            <label for="signupName">Full Name</label>
+                            <input type="text" id="signupName" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="signupEmail">Email</label>
+                            <input type="email" id="signupEmail" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="signupPassword">Password</label>
+                            <input type="password" id="signupPassword" required>
+                        </div>
+                        <button type="submit" class="btn btn-primary btn-full">Create Account</button>
+                    </form>
+                    
+                    <p class="auth-switch">
+                        Already have an account? 
+                        <button class="link-btn" id="showLoginBtn">Sign in</button>
+                    </p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="landing.js"></script>
+</body>
+</html>
