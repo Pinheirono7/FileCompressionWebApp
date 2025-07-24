@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AnimationStudio - Custom Animation Tool</title>
+    <link rel="stylesheet" href="styles/main.css">
+    <link rel="stylesheet" href="styles/timeline.css">
+    <link rel="stylesheet" href="styles/controls.css">
+</head>
+<body>
+    <div id="app">
+        <!-- Header -->
+        <header class="header">
+            <div class="header-left">
+                <h1>AnimationStudio</h1>
+                <button id="newProject" class="btn btn-primary">New Project</button>
+                <button id="loadProject" class="btn btn-secondary">Load Project</button>
+                <button id="saveProject" class="btn btn-secondary">Save Project</button>
+            </div>
+            <div class="header-right">
+                <button id="exportVideo" class="btn btn-success">Export Video</button>
+                <button id="exportGif" class="btn btn-success">Export GIF</button>
+            </div>
+        </header>
+
+        <div class="main-container">
+            <!-- Left Panel - Assets -->
+            <aside class="left-panel">
+                <div class="panel-section">
+                    <h3>Assets</h3>
+                    <div class="asset-upload">
+                        <input type="file" id="assetUpload" multiple accept="image/*" style="display: none;">
+                        <button id="uploadBtn" class="btn btn-outline">Upload Assets</button>
+                    </div>
+                    <div id="assetList" class="asset-list"></div>
+                </div>
+                
+                <div class="panel-section">
+                    <h3>Scene Objects</h3>
+                    <div id="sceneObjects" class="scene-objects"></div>
+                </div>
+            </aside>
+
+            <!-- Center - Canvas Area -->
+            <main class="canvas-container">
+                <div class="canvas-toolbar">
+                    <button id="selectTool" class="tool-btn active" data-tool="select">Select</button>
+                    <button id="moveTool" class="tool-btn" data-tool="move">Move</button>
+                    <button id="rotateTool" class="tool-btn" data-tool="rotate">Rotate</button>
+                    <button id="scaleTool" class="tool-btn" data-tool="scale">Scale</button>
+                    <div class="canvas-controls">
+                        <span>Zoom: </span>
+                        <input type="range" id="zoomSlider" min="25" max="200" value="100">
+                        <span id="zoomValue">100%</span>
+                    </div>
+                </div>
+                <div class="canvas-wrapper">
+                    <canvas id="animationCanvas" width="1920" height="1080"></canvas>
+                    <div id="canvasOverlay" class="canvas-overlay"></div>
+                </div>
+            </main>
+
+            <!-- Right Panel - Properties -->
+            <aside class="right-panel">
+                <div class="panel-section">
+                    <h3>Properties</h3>
+                    <div id="objectProperties" class="object-properties">
+                        <p>Select an object to edit properties</p>
+                    </div>
+                </div>
+                
+                <div class="panel-section">
+                    <h3>Animation</h3>
+                    <div class="animation-controls">
+                        <button id="addKeyframe" class="btn btn-small">Add Keyframe</button>
+                        <button id="deleteKeyframe" class="btn btn-small btn-danger">Delete Keyframe</button>
+                    </div>
+                </div>
+            </aside>
+        </div>
+
+        <!-- Bottom - Timeline -->
+        <div class="timeline-container">
+            <div class="timeline-header">
+                <div class="playback-controls">
+                    <button id="playBtn" class="btn btn-play">▶</button>
+                    <button id="pauseBtn" class="btn btn-pause">⏸</button>
+                    <button id="stopBtn" class="btn btn-stop">⏹</button>
+                    <button id="rewindBtn" class="btn btn-rewind">⏮</button>
+                    <span class="time-display">
+                        <span id="currentTime">0:00</span> / <span id="totalTime">0:10</span>
+                    </span>
+                </div>
+                <div class="timeline-settings">
+                    <label>Duration: <input type="number" id="timelineDuration" value="10" min="1" max="300" step="1"> sec</label>
+                    <label>FPS: <select id="timelineFPS">
+                        <option value="24">24</option>
+                        <option value="30" selected>30</option>
+                        <option value="60">60</option>
+                    </select></label>
+                </div>
+            </div>
+            <div id="timeline" class="timeline"></div>
+        </div>
+
+        <!-- Audio Controls -->
+        <div class="audio-container" style="display: none;">
+            <div class="audio-controls">
+                <input type="file" id="audioUpload" accept="audio/*" style="display: none;">
+                <button id="uploadAudio" class="btn btn-secondary">Upload Audio</button>
+                <div id="audioWaveform" class="audio-waveform"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal for Export Progress -->
+    <div id="exportModal" class="modal" style="display: none;">
+        <div class="modal-content">
+            <h3>Exporting Animation...</h3>
+            <div class="progress-bar">
+                <div id="exportProgress" class="progress-fill"></div>
+            </div>
+            <p id="exportStatus">Preparing export...</p>
+        </div>
+    </div>
+
+    <!-- Core Engine Scripts -->
+    <script src="js/core/canvas-engine.js"></script>
+    <script src="js/core/timeline.js"></script>
+    <script src="js/core/playback.js"></script>
+    <script src="js/core/asset-loader.js"></script>
+    <script src="js/core/project-exporter.js"></script>
+    
+    <!-- UI Controllers -->
+    <script src="js/ui/drag-drop.js"></script>
+    <script src="js/ui/properties-panel.js"></script>
+    <script src="js/ui/timeline-ui.js"></script>
+    
+    <!-- Audio System -->
+    <script src="js/audio/audio-engine.js"></script>
+    
+    <!-- Main Application -->
+    <script src="js/app.js"></script>
+</body>
+</html>
