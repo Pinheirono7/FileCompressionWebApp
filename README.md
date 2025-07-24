@@ -75,15 +75,36 @@ AnimationStudio/
 
 ## 🚀 Getting Started
 
+### Quick Start (NPM)
+```bash
+# Install dependencies
+npm install
+
+# Start development server
+npm run dev
+```
+
+The application will automatically open in your browser at `http://localhost:3000`
+
+### Alternative (Direct Browser)
 1. **Clone or Download** the project files
 2. **Open** `index.html` in a modern web browser
 3. **Start Creating** - Upload assets and begin animating!
+
+### Available Scripts
+- `npm run dev` - Start development server with hot reload
+- `npm run build` - Build production version
+- `npm run preview` - Preview production build
+- `npm run serve` - Serve using http-server
+- `npm run lint` - Lint JavaScript files
+- `npm run format` - Format code with Prettier
 
 ### Browser Requirements
 - Modern browser with Canvas API support
 - MediaRecorder API for video export (Chrome, Firefox, Edge)
 - File API for asset uploads
 - LocalStorage for project saving
+- Node.js 16+ (for development)
 
 ## 📖 Usage Guide
 
