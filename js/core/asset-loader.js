@@ -1,356 +1,413 @@
 /**
- * Asset Loader - Media File Management and Loading
- * Handles image uploads, caching, preloading, and asset organization
+ * Asset Loader - File and asset management system
+ * Handles asset uploads, thumbnails, categorization, and optimization
  */
 
 class AssetLoader {
     constructor() {
-        this.assets = new Map(); // assetId -> asset data
-        this.loadingPromises = new Map(); // src -> Promise
-        this.cache = new Map(); // src -> loaded data
-        this.thumbnails = new Map(); // assetId -> thumbnail data
-        this.categories = new Map(); // category -> asset ids
-        this.tags = new Map(); // tag -> asset ids
-        this.searchIndex = new Map(); // keyword -> asset ids
+        this.assets = new Map();
+        this.thumbnails = new Map();
+        this.categories = new Map();
         
-        this.maxCacheSize = 100 * 1024 * 1024; // 100MB cache limit
-        this.currentCacheSize = 0;
-        this.thumbnailSize = { width: 80, height: 80 };
-        this.supportedFormats = [
+        // Supported file types
+        this.supportedImageTypes = [
             'image/jpeg', 'image/jpg', 'image/png', 'image/gif', 
             'image/webp', 'image/svg+xml', 'image/bmp'
         ];
         
-        this.setupEventListeners();
+        this.supportedAudioTypes = [
+            'audio/mp3', 'audio/wav', 'audio/ogg', 'audio/m4a'
+        ];
+        
+        this.supportedVideoTypes = [
+            'video/mp4', 'video/webm', 'video/mov'
+        ];
+        
+        // Asset limits and settings
+        this.maxFileSize = 50 * 1024 * 1024; // 50MB
+        this.maxAssets = 1000;
+        this.thumbnailSize = 150;
+        this.compressionQuality = 0.8;
+        
+        // Asset usage tracking
+        this.usageCount = new Map();
+        
+        console.log('✅ Asset Loader initialized');
     }
 
     // Asset Management
-    async addAsset(file, options = {}) {
-        const {
-            category = 'uncategorized',
-            tags = [],
-            name = file.name,
-            description = ''
-        } = options;
-
-        // Validate file type
-        if (!this.isValidFormat(file.type)) {
-            throw new Error(`Unsupported file format: ${file.type}`);
-        }
-
-        // Check file size (limit to 50MB per file)
-        if (file.size > 50 * 1024 * 1024) {
-            throw new Error('File size too large. Maximum size is 50MB.');
-        }
-
-        const assetId = `asset_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-        const src = await this.fileToDataURL(file);
-        
-        const asset = {
-            id: assetId,
-            name: this.sanitizeFileName(name),
-            src,
-            type: file.type,
-            size: file.size,
-            category,
-            tags: [...tags],
-            description,
-            width: 0,
-            height: 0,
-            aspectRatio: 1,
-            created: Date.now(),
-            lastUsed: Date.now(),
-            usageCount: 0,
-            file: file
+    async addAssetsFromFiles(files) {
+        const results = {
+            assets: [],
+            errors: []
         };
-
-        // Load image to get dimensions
-        try {
-            const imageData = await this.loadImage(src);
-            asset.width = imageData.width;
-            asset.height = imageData.height;
-            asset.aspectRatio = imageData.width / imageData.height;
-            asset.image = imageData;
-        } catch (error) {
-            console.warn('Failed to load image dimensions:', error);
+        
+        if (this.assets.size + files.length > this.maxAssets) {
+            throw new Error(`Cannot add ${files.length} assets. Maximum ${this.maxAssets} assets allowed.`);
         }
-
-        // Generate thumbnail
-        try {
-            asset.thumbnail = await this.generateThumbnail(asset);
-        } catch (error) {
-            console.warn('Failed to generate thumbnail:', error);
-        }
-
-        // Store asset
-        this.assets.set(assetId, asset);
-        this.addToCategory(category, assetId);
-        this.addTags(assetId, tags);
-        this.updateSearchIndex(asset);
-        this.updateCacheSize();
-
-        this.notifyAssetAdded(asset);
-        return asset;
-    }
-
-    async addAssetsFromFiles(files, options = {}) {
-        const results = [];
-        const errors = [];
-
-        for (const file of files) {
+        
+        // Process files in parallel for better performance
+        const promises = Array.from(files).map(async (file) => {
             try {
-                const asset = await this.addAsset(file, options);
-                results.push(asset);
+                const asset = await this.addAssetFromFile(file);
+                results.assets.push(asset);
             } catch (error) {
-                errors.push({ file: file.name, error: error.message });
+                results.errors.push({
+                    file: file.name,
+                    error: error.message
+                });
             }
+        });
+        
+        await Promise.all(promises);
+        
+        // Emit event
+        window.dispatchEvent(new CustomEvent('assets:assetsAdded', {
+            detail: { assets: results.assets, errors: results.errors }
+        }));
+        
+        return results;
+    }
+
+    async addAssetFromFile(file) {
+        // Validate file
+        this.validateFile(file);
+        
+        // Generate unique ID
+        const id = this.generateAssetId();
+        
+        // Determine asset type
+        const type = this.getAssetType(file.type);
+        
+        // Create asset object
+        const asset = {
+            id: id,
+            name: file.name,
+            type: type,
+            mimeType: file.type,
+            size: file.size,
+            lastModified: file.lastModified,
+            src: null,
+            thumbnail: null,
+            category: this.categorizeAsset(file),
+            tags: [],
+            metadata: {},
+            uploadedAt: Date.now(),
+            used: false
+        };
+        
+        try {
+            // Process file based on type
+            switch (type) {
+                case 'image':
+                    await this.processImageAsset(asset, file);
+                    break;
+                case 'audio':
+                    await this.processAudioAsset(asset, file);
+                    break;
+                case 'video':
+                    await this.processVideoAsset(asset, file);
+                    break;
+                default:
+                    throw new Error(`Unsupported asset type: ${type}`);
+            }
+            
+            // Store asset
+            this.assets.set(id, asset);
+            this.usageCount.set(id, 0);
+            
+            // Add to category
+            this.addToCategory(asset.category, asset);
+            
+            // Emit individual asset added event
+            window.dispatchEvent(new CustomEvent('assets:assetAdded', {
+                detail: { asset }
+            }));
+            
+            console.log(`✅ Asset added: ${asset.name} (${asset.type})`);
+            return asset;
+            
+        } catch (error) {
+            console.error(`Failed to process asset ${file.name}:`, error);
+            throw new Error(`Failed to process ${file.name}: ${error.message}`);
         }
-
-        return { assets: results, errors };
     }
 
-    deleteAsset(assetId) {
-        const asset = this.assets.get(assetId);
-        if (!asset) return false;
-
-        // Remove from cache
-        this.cache.delete(asset.src);
-        this.thumbnails.delete(assetId);
+    // File Processing
+    async processImageAsset(asset, file) {
+        // Create data URL
+        asset.src = await this.fileToDataURL(file);
         
-        // Remove from categories and tags
-        this.removeFromCategory(asset.category, assetId);
-        this.removeTags(assetId, asset.tags);
-        this.removeFromSearchIndex(asset);
+        // Extract image metadata
+        const img = new Image();
+        await new Promise((resolve, reject) => {
+            img.onload = () => {
+                asset.metadata = {
+                    width: img.naturalWidth,
+                    height: img.naturalHeight,
+                    aspectRatio: img.naturalWidth / img.naturalHeight
+                };
+                resolve();
+            };
+            img.onerror = () => reject(new Error('Failed to load image'));
+            img.src = asset.src;
+        });
         
-        // Remove asset
-        this.assets.delete(assetId);
-        this.updateCacheSize();
-        
-        this.notifyAssetDeleted(asset);
-        return true;
+        // Generate thumbnail
+        asset.thumbnail = await this.generateImageThumbnail(img);
+        this.thumbnails.set(asset.id, asset.thumbnail);
     }
 
-    getAsset(assetId) {
-        return this.assets.get(assetId);
+    async processAudioAsset(asset, file) {
+        // Create data URL
+        asset.src = await this.fileToDataURL(file);
+        
+        // Extract audio metadata (basic)
+        asset.metadata = {
+            duration: 0, // Would need audio element to get accurate duration
+            format: file.type
+        };
+        
+        // Generate audio thumbnail (waveform or icon)
+        asset.thumbnail = this.generateAudioThumbnail();
+        this.thumbnails.set(asset.id, asset.thumbnail);
+    }
+
+    async processVideoAsset(asset, file) {
+        // Create data URL
+        asset.src = await this.fileToDataURL(file);
+        
+        // Extract video metadata
+        const video = document.createElement('video');
+        await new Promise((resolve, reject) => {
+            video.onloadedmetadata = () => {
+                asset.metadata = {
+                    width: video.videoWidth,
+                    height: video.videoHeight,
+                    duration: video.duration,
+                    aspectRatio: video.videoWidth / video.videoHeight
+                };
+                resolve();
+            };
+            video.onerror = () => reject(new Error('Failed to load video'));
+            video.src = asset.src;
+        });
+        
+        // Generate video thumbnail (first frame)
+        asset.thumbnail = await this.generateVideoThumbnail(video);
+        this.thumbnails.set(asset.id, asset.thumbnail);
+    }
+
+    // Thumbnail Generation
+    async generateImageThumbnail(img) {
+        const canvas = document.createElement('canvas');
+        const ctx = canvas.getContext('2d');
+        
+        // Calculate thumbnail dimensions maintaining aspect ratio
+        const aspectRatio = img.width / img.height;
+        let thumbWidth = this.thumbnailSize;
+        let thumbHeight = this.thumbnailSize;
+        
+        if (aspectRatio > 1) {
+            thumbHeight = this.thumbnailSize / aspectRatio;
+        } else {
+            thumbWidth = this.thumbnailSize * aspectRatio;
+        }
+        
+        canvas.width = thumbWidth;
+        canvas.height = thumbHeight;
+        
+        // Draw scaled image
+        ctx.drawImage(img, 0, 0, thumbWidth, thumbHeight);
+        
+        return canvas.toDataURL('image/jpeg', this.compressionQuality);
+    }
+
+    generateAudioThumbnail() {
+        // Generate a simple audio icon as thumbnail
+        const canvas = document.createElement('canvas');
+        const ctx = canvas.getContext('2d');
+        canvas.width = this.thumbnailSize;
+        canvas.height = this.thumbnailSize;
+        
+        // Draw audio icon
+        ctx.fillStyle = '#4CAF50';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        
+        ctx.fillStyle = 'white';
+        ctx.font = `${this.thumbnailSize / 3}px Arial`;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText('🎵', canvas.width / 2, canvas.height / 2);
+        
+        return canvas.toDataURL();
+    }
+
+    async generateVideoThumbnail(video) {
+        const canvas = document.createElement('canvas');
+        const ctx = canvas.getContext('2d');
+        
+        // Set video to first frame
+        video.currentTime = 0;
+        
+        await new Promise(resolve => {
+            video.onseeked = resolve;
+        });
+        
+        // Calculate thumbnail dimensions
+        const aspectRatio = video.videoWidth / video.videoHeight;
+        let thumbWidth = this.thumbnailSize;
+        let thumbHeight = this.thumbnailSize;
+        
+        if (aspectRatio > 1) {
+            thumbHeight = this.thumbnailSize / aspectRatio;
+        } else {
+            thumbWidth = this.thumbnailSize * aspectRatio;
+        }
+        
+        canvas.width = thumbWidth;
+        canvas.height = thumbHeight;
+        
+        // Draw video frame
+        ctx.drawImage(video, 0, 0, thumbWidth, thumbHeight);
+        
+        return canvas.toDataURL('image/jpeg', this.compressionQuality);
+    }
+
+    // Asset Retrieval
+    getAsset(id) {
+        return this.assets.get(id);
     }
 
     getAllAssets() {
         return Array.from(this.assets.values());
     }
 
+    getAssetsByType(type) {
+        return this.getAllAssets().filter(asset => asset.type === type);
+    }
+
     getAssetsByCategory(category) {
-        const assetIds = this.categories.get(category) || new Set();
-        return Array.from(assetIds).map(id => this.assets.get(id)).filter(Boolean);
+        const categoryAssets = this.categories.get(category);
+        return categoryAssets ? Array.from(categoryAssets) : [];
     }
 
-    getAssetsByTag(tag) {
-        const assetIds = this.tags.get(tag) || new Set();
-        return Array.from(assetIds).map(id => this.assets.get(id)).filter(Boolean);
-    }
-
-    // Asset Loading
-    async loadImage(src) {
-        // Check cache first
-        if (this.cache.has(src)) {
-            return this.cache.get(src);
-        }
-
-        // Check if already loading
-        if (this.loadingPromises.has(src)) {
-            return await this.loadingPromises.get(src);
-        }
-
-        // Create loading promise
-        const loadPromise = new Promise((resolve, reject) => {
-            const img = new Image();
-            
-            img.onload = () => {
-                const imageData = {
-                    image: img,
-                    width: img.naturalWidth,
-                    height: img.naturalHeight,
-                    aspectRatio: img.naturalWidth / img.naturalHeight,
-                    src
-                };
-                
-                this.cache.set(src, imageData);
-                this.loadingPromises.delete(src);
-                resolve(imageData);
-            };
-
-            img.onerror = (error) => {
-                this.loadingPromises.delete(src);
-                reject(new Error(`Failed to load image: ${src}`));
-            };
-
-            img.src = src;
-        });
-
-        this.loadingPromises.set(src, loadPromise);
-        return await loadPromise;
-    }
-
-    async preloadAssets(assetIds) {
-        const promises = assetIds.map(async (id) => {
-            const asset = this.getAsset(id);
-            if (asset && !this.cache.has(asset.src)) {
-                try {
-                    await this.loadImage(asset.src);
-                    asset.lastUsed = Date.now();
-                } catch (error) {
-                    console.warn(`Failed to preload asset ${id}:`, error);
-                }
-            }
-        });
-
-        return await Promise.allSettled(promises);
-    }
-
-    // Thumbnail Generation
-    async generateThumbnail(asset) {
-        if (!asset.image && asset.src) {
-            try {
-                asset.image = await this.loadImage(asset.src);
-            } catch (error) {
-                return null;
-            }
-        }
-
-        if (!asset.image) return null;
-
-        const canvas = document.createElement('canvas');
-        const ctx = canvas.getContext('2d');
+    searchAssets(query) {
+        if (!query) return this.getAllAssets();
         
-        const { width: thumbWidth, height: thumbHeight } = this.thumbnailSize;
-        canvas.width = thumbWidth;
-        canvas.height = thumbHeight;
-
-        // Calculate scaling to maintain aspect ratio
-        const scale = Math.min(
-            thumbWidth / asset.width,
-            thumbHeight / asset.height
+        const lowercaseQuery = query.toLowerCase();
+        return this.getAllAssets().filter(asset => 
+            asset.name.toLowerCase().includes(lowercaseQuery) ||
+            asset.tags.some(tag => tag.toLowerCase().includes(lowercaseQuery)) ||
+            asset.category.toLowerCase().includes(lowercaseQuery)
         );
-
-        const scaledWidth = asset.width * scale;
-        const scaledHeight = asset.height * scale;
-        const x = (thumbWidth - scaledWidth) / 2;
-        const y = (thumbHeight - scaledHeight) / 2;
-
-        // Clear background
-        ctx.fillStyle = '#f0f0f0';
-        ctx.fillRect(0, 0, thumbWidth, thumbHeight);
-
-        // Draw image
-        ctx.drawImage(asset.image.image, x, y, scaledWidth, scaledHeight);
-
-        const thumbnailData = canvas.toDataURL('image/jpeg', 0.8);
-        this.thumbnails.set(asset.id, thumbnailData);
-        
-        return thumbnailData;
     }
 
     getThumbnail(assetId) {
         return this.thumbnails.get(assetId);
     }
 
-    // Search and Filtering
-    searchAssets(query, options = {}) {
-        const {
-            category = null,
-            tags = [],
-            sortBy = 'name',
-            sortOrder = 'asc',
-            limit = null
-        } = options;
-
-        let results = [];
-
-        if (!query || query.trim() === '') {
-            results = this.getAllAssets();
-        } else {
-            const keywords = query.toLowerCase().split(/\s+/);
-            const matchingIds = new Set();
-
-            keywords.forEach(keyword => {
-                const ids = this.searchIndex.get(keyword) || new Set();
-                if (matchingIds.size === 0) {
-                    ids.forEach(id => matchingIds.add(id));
-                } else {
-                    // Intersection of results (AND search)
-                    const intersection = new Set();
-                    matchingIds.forEach(id => {
-                        if (ids.has(id)) {
-                            intersection.add(id);
-                        }
-                    });
-                    matchingIds.clear();
-                    intersection.forEach(id => matchingIds.add(id));
-                }
-            });
-
-            results = Array.from(matchingIds)
-                .map(id => this.assets.get(id))
-                .filter(Boolean);
-        }
-
-        // Filter by category
-        if (category) {
-            results = results.filter(asset => asset.category === category);
-        }
-
-        // Filter by tags
-        if (tags.length > 0) {
-            results = results.filter(asset => 
-                tags.some(tag => asset.tags.includes(tag))
-            );
-        }
-
-        // Sort results
-        results.sort((a, b) => {
-            let comparison = 0;
+    // Asset Management
+    deleteAsset(id) {
+        const asset = this.assets.get(id);
+        if (asset) {
+            // Remove from storage
+            this.assets.delete(id);
+            this.thumbnails.delete(id);
+            this.usageCount.delete(id);
             
-            switch (sortBy) {
-                case 'name':
-                    comparison = a.name.localeCompare(b.name);
-                    break;
-                case 'created':
-                    comparison = a.created - b.created;
-                    break;
-                case 'lastUsed':
-                    comparison = a.lastUsed - b.lastUsed;
-                    break;
-                case 'size':
-                    comparison = a.size - b.size;
-                    break;
-                case 'usageCount':
-                    comparison = a.usageCount - b.usageCount;
-                    break;
-            }
-
-            return sortOrder === 'desc' ? -comparison : comparison;
-        });
-
-        // Apply limit
-        if (limit && limit > 0) {
-            results = results.slice(0, limit);
+            // Remove from category
+            this.removeFromCategory(asset.category, asset);
+            
+            // Emit event
+            window.dispatchEvent(new CustomEvent('assets:assetDeleted', {
+                detail: { asset }
+            }));
+            
+            console.log(`🗑️ Asset deleted: ${asset.name}`);
+            return true;
         }
-
-        return results;
+        return false;
     }
 
-    // Category Management
-    addToCategory(category, assetId) {
+    updateAsset(id, updates) {
+        const asset = this.assets.get(id);
+        if (asset) {
+            // Update category if changed
+            if (updates.category && updates.category !== asset.category) {
+                this.removeFromCategory(asset.category, asset);
+                this.addToCategory(updates.category, asset);
+            }
+            
+            Object.assign(asset, updates);
+            
+            // Emit event
+            window.dispatchEvent(new CustomEvent('assets:assetUpdated', {
+                detail: { asset }
+            }));
+            
+            return asset;
+        }
+        return null;
+    }
+
+    markAssetUsed(id) {
+        const asset = this.assets.get(id);
+        if (asset) {
+            asset.used = true;
+            const count = this.usageCount.get(id) || 0;
+            this.usageCount.set(id, count + 1);
+        }
+    }
+
+    getAssetUsage(id) {
+        return this.usageCount.get(id) || 0;
+    }
+
+    // Categorization
+    categorizeAsset(file) {
+        const type = this.getAssetType(file.type);
+        const name = file.name.toLowerCase();
+        
+        if (type === 'image') {
+            if (name.includes('character') || name.includes('person') || name.includes('avatar')) {
+                return 'characters';
+            } else if (name.includes('background') || name.includes('scene') || name.includes('landscape')) {
+                return 'backgrounds';
+            } else if (name.includes('prop') || name.includes('object') || name.includes('item')) {
+                return 'props';
+            } else if (name.includes('ui') || name.includes('button') || name.includes('icon')) {
+                return 'ui';
+            }
+            return 'images';
+        } else if (type === 'audio') {
+            if (name.includes('music') || name.includes('song') || name.includes('track')) {
+                return 'music';
+            } else if (name.includes('sound') || name.includes('sfx') || name.includes('effect')) {
+                return 'sounds';
+            } else if (name.includes('voice') || name.includes('speech') || name.includes('narration')) {
+                return 'voice';
+            }
+            return 'audio';
+        } else if (type === 'video') {
+            return 'videos';
+        }
+        
+        return 'uncategorized';
+    }
+
+    addToCategory(category, asset) {
         if (!this.categories.has(category)) {
             this.categories.set(category, new Set());
         }
-        this.categories.get(category).add(assetId);
+        this.categories.get(category).add(asset);
     }
 
-    removeFromCategory(category, assetId) {
-        const categorySet = this.categories.get(category);
-        if (categorySet) {
-            categorySet.delete(assetId);
-            if (categorySet.size === 0) {
+    removeFromCategory(category, asset) {
+        const categoryAssets = this.categories.get(category);
+        if (categoryAssets) {
+            categoryAssets.delete(asset);
+            if (categoryAssets.size === 0) {
                 this.categories.delete(category);
             }
         }
@@ -360,165 +417,200 @@ class AssetLoader {
         return Array.from(this.categories.keys());
     }
 
-    renameCategory(oldName, newName) {
-        const assetIds = this.categories.get(oldName);
-        if (assetIds) {
-            this.categories.set(newName, assetIds);
-            this.categories.delete(oldName);
-            
-            // Update assets
-            assetIds.forEach(id => {
-                const asset = this.assets.get(id);
-                if (asset) {
-                    asset.category = newName;
+    getCategoryStats() {
+        const stats = {};
+        for (const [category, assets] of this.categories) {
+            stats[category] = assets.size;
+        }
+        return stats;
+    }
+
+    // Validation
+    validateFile(file) {
+        // Check file size
+        if (file.size > this.maxFileSize) {
+            throw new Error(`File size ${this.formatFileSize(file.size)} exceeds maximum ${this.formatFileSize(this.maxFileSize)}`);
+        }
+        
+        // Check file type
+        const allSupportedTypes = [
+            ...this.supportedImageTypes,
+            ...this.supportedAudioTypes,
+            ...this.supportedVideoTypes
+        ];
+        
+        if (!allSupportedTypes.includes(file.type)) {
+            throw new Error(`File type ${file.type} is not supported`);
+        }
+        
+        // Check file name
+        if (!file.name || file.name.trim().length === 0) {
+            throw new Error('File must have a valid name');
+        }
+        
+        // Check for duplicates (by name and size)
+        const existing = this.getAllAssets().find(asset => 
+            asset.name === file.name && asset.size === file.size
+        );
+        
+        if (existing) {
+            throw new Error(`Asset "${file.name}" already exists`);
+        }
+        
+        return true;
+    }
+
+    getAssetType(mimeType) {
+        if (this.supportedImageTypes.includes(mimeType)) {
+            return 'image';
+        } else if (this.supportedAudioTypes.includes(mimeType)) {
+            return 'audio';
+        } else if (this.supportedVideoTypes.includes(mimeType)) {
+            return 'video';
+        }
+        return 'unknown';
+    }
+
+    getSupportedTypes() {
+        return {
+            images: this.supportedImageTypes,
+            audio: this.supportedAudioTypes,
+            videos: this.supportedVideoTypes
+        };
+    }
+
+    // Asset Export/Import
+    exportAssets() {
+        const assets = this.getAllAssets();
+        return {
+            version: '1.0',
+            exportedAt: Date.now(),
+            totalAssets: assets.length,
+            assets: assets.map(asset => ({
+                ...asset,
+                // Don't export the actual data for large files
+                src: asset.size > 1024 * 1024 ? null : asset.src,
+                thumbnail: this.thumbnails.get(asset.id)
+            })),
+            categories: Object.fromEntries(this.categories.entries()),
+            stats: this.getCategoryStats()
+        };
+    }
+
+    async importAssets(data) {
+        if (!data.assets) {
+            throw new Error('Invalid asset data');
+        }
+        
+        const imported = {
+            assets: [],
+            errors: []
+        };
+        
+        for (const assetData of data.assets) {
+            try {
+                // Regenerate ID to avoid conflicts
+                const newId = this.generateAssetId();
+                const asset = {
+                    ...assetData,
+                    id: newId,
+                    uploadedAt: Date.now()
+                };
+                
+                // Skip if no source data
+                if (!asset.src) {
+                    imported.errors.push({
+                        asset: asset.name,
+                        error: 'Asset source data not available'
+                    });
+                    continue;
                 }
-            });
-        }
-    }
-
-    // Tag Management
-    addTags(assetId, tags) {
-        tags.forEach(tag => {
-            const normalizedTag = tag.toLowerCase().trim();
-            if (!this.tags.has(normalizedTag)) {
-                this.tags.set(normalizedTag, new Set());
-            }
-            this.tags.get(normalizedTag).add(assetId);
-        });
-    }
-
-    removeTags(assetId, tags) {
-        tags.forEach(tag => {
-            const normalizedTag = tag.toLowerCase().trim();
-            const tagSet = this.tags.get(normalizedTag);
-            if (tagSet) {
-                tagSet.delete(assetId);
-                if (tagSet.size === 0) {
-                    this.tags.delete(normalizedTag);
+                
+                this.assets.set(newId, asset);
+                this.usageCount.set(newId, 0);
+                
+                if (asset.thumbnail) {
+                    this.thumbnails.set(newId, asset.thumbnail);
                 }
+                
+                this.addToCategory(asset.category, asset);
+                imported.assets.push(asset);
+                
+            } catch (error) {
+                imported.errors.push({
+                    asset: assetData.name || 'Unknown',
+                    error: error.message
+                });
             }
-        });
-    }
-
-    getAllTags() {
-        return Array.from(this.tags.keys());
-    }
-
-    getTagsForAsset(assetId) {
-        const asset = this.getAsset(assetId);
-        return asset ? [...asset.tags] : [];
-    }
-
-    // Search Index Management
-    updateSearchIndex(asset) {
-        const keywords = this.extractKeywords(asset);
-        keywords.forEach(keyword => {
-            if (!this.searchIndex.has(keyword)) {
-                this.searchIndex.set(keyword, new Set());
-            }
-            this.searchIndex.get(keyword).add(asset.id);
-        });
-    }
-
-    removeFromSearchIndex(asset) {
-        const keywords = this.extractKeywords(asset);
-        keywords.forEach(keyword => {
-            const keywordSet = this.searchIndex.get(keyword);
-            if (keywordSet) {
-                keywordSet.delete(asset.id);
-                if (keywordSet.size === 0) {
-                    this.searchIndex.delete(keyword);
-                }
-            }
-        });
-    }
-
-    extractKeywords(asset) {
-        const keywords = new Set();
-        
-        // Add name words
-        asset.name.toLowerCase().split(/\s+/).forEach(word => {
-            if (word.length > 2) keywords.add(word);
-        });
-        
-        // Add description words
-        if (asset.description) {
-            asset.description.toLowerCase().split(/\s+/).forEach(word => {
-                if (word.length > 2) keywords.add(word);
-            });
         }
         
-        // Add tags
-        asset.tags.forEach(tag => {
-            keywords.add(tag.toLowerCase());
+        return imported;
+    }
+
+    // Asset Optimization
+    async optimizeAsset(id, options = {}) {
+        const asset = this.getAsset(id);
+        if (!asset || asset.type !== 'image') {
+            throw new Error('Asset not found or not optimizable');
+        }
+        
+        const {
+            maxWidth = 1920,
+            maxHeight = 1080,
+            quality = 0.8,
+            format = 'image/jpeg'
+        } = options;
+        
+        const img = new Image();
+        await new Promise((resolve, reject) => {
+            img.onload = resolve;
+            img.onerror = reject;
+            img.src = asset.src;
         });
         
-        // Add category
-        keywords.add(asset.category.toLowerCase());
+        // Check if optimization is needed
+        if (img.width <= maxWidth && img.height <= maxHeight) {
+            return asset; // No optimization needed
+        }
         
-        return Array.from(keywords);
-    }
-
-    // Usage Tracking
-    markAssetUsed(assetId) {
-        const asset = this.getAsset(assetId);
-        if (asset) {
-            asset.lastUsed = Date.now();
-            asset.usageCount = (asset.usageCount || 0) + 1;
+        // Create optimized version
+        const canvas = document.createElement('canvas');
+        const ctx = canvas.getContext('2d');
+        
+        // Calculate new dimensions
+        const aspectRatio = img.width / img.height;
+        let newWidth = maxWidth;
+        let newHeight = maxHeight;
+        
+        if (aspectRatio > 1) {
+            newHeight = maxWidth / aspectRatio;
+        } else {
+            newWidth = maxHeight * aspectRatio;
         }
+        
+        canvas.width = newWidth;
+        canvas.height = newHeight;
+        
+        // Draw optimized image
+        ctx.drawImage(img, 0, 0, newWidth, newHeight);
+        
+        // Update asset
+        const optimizedSrc = canvas.toDataURL(format, quality);
+        asset.src = optimizedSrc;
+        asset.metadata.width = newWidth;
+        asset.metadata.height = newHeight;
+        asset.size = optimizedSrc.length; // Approximate size
+        
+        // Regenerate thumbnail
+        asset.thumbnail = await this.generateImageThumbnail(img);
+        this.thumbnails.set(id, asset.thumbnail);
+        
+        console.log(`🔧 Asset optimized: ${asset.name}`);
+        return asset;
     }
 
-    getMostUsedAssets(limit = 10) {
-        return this.getAllAssets()
-            .sort((a, b) => (b.usageCount || 0) - (a.usageCount || 0))
-            .slice(0, limit);
-    }
-
-    getRecentlyUsedAssets(limit = 10) {
-        return this.getAllAssets()
-            .sort((a, b) => (b.lastUsed || 0) - (a.lastUsed || 0))
-            .slice(0, limit);
-    }
-
-    // Cache Management
-    updateCacheSize() {
-        this.currentCacheSize = Array.from(this.assets.values())
-            .reduce((total, asset) => total + asset.size, 0);
-    }
-
-    clearCache() {
-        this.cache.clear();
-        this.loadingPromises.clear();
-    }
-
-    optimizeCache() {
-        if (this.currentCacheSize <= this.maxCacheSize) return;
-
-        // Remove least recently used assets from cache
-        const sortedAssets = this.getAllAssets()
-            .sort((a, b) => a.lastUsed - b.lastUsed);
-
-        let removedSize = 0;
-        for (const asset of sortedAssets) {
-            if (this.currentCacheSize - removedSize <= this.maxCacheSize * 0.8) {
-                break;
-            }
-            
-            this.cache.delete(asset.src);
-            removedSize += asset.size;
-        }
-    }
-
-    // Utility Methods
-    isValidFormat(mimeType) {
-        return this.supportedFormats.includes(mimeType);
-    }
-
-    sanitizeFileName(name) {
-        return name.replace(/[^a-zA-Z0-9.-]/g, '_');
-    }
-
-    async fileToDataURL(file) {
+    // Utilities
+    fileToDataURL(file) {
         return new Promise((resolve, reject) => {
             const reader = new FileReader();
             reader.onload = (e) => resolve(e.target.result);
@@ -527,7 +619,11 @@ class AssetLoader {
         });
     }
 
-    getFileSize(bytes) {
+    generateAssetId() {
+        return 'asset_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+    }
+
+    formatFileSize(bytes) {
         if (bytes === 0) return '0 Bytes';
         const k = 1024;
         const sizes = ['Bytes', 'KB', 'MB', 'GB'];
@@ -535,136 +631,41 @@ class AssetLoader {
         return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
     }
 
-    // Export/Import
-    exportAssets() {
-        const assetsData = Array.from(this.assets.values()).map(asset => ({
-            ...asset,
-            image: undefined, // Don't export loaded image objects
-            file: undefined   // Don't export file objects
-        }));
-
-        return {
-            assets: assetsData,
-            categories: Object.fromEntries(this.categories),
-            metadata: {
-                totalAssets: this.assets.size,
-                totalSize: this.currentCacheSize,
-                exportDate: Date.now()
-            }
-        };
-    }
-
-    async importAssets(data) {
-        const { assets, categories } = data;
-        const results = { imported: 0, errors: [] };
-
-        for (const assetData of assets) {
-            try {
-                // Reconstruct asset
-                const asset = { ...assetData };
-                
-                // Load image if src is provided
-                if (asset.src) {
-                    try {
-                        asset.image = await this.loadImage(asset.src);
-                    } catch (error) {
-                        console.warn(`Failed to load imported asset image: ${asset.name}`);
-                    }
-                }
-
-                this.assets.set(asset.id, asset);
-                this.addToCategory(asset.category, asset.id);
-                this.addTags(asset.id, asset.tags);
-                this.updateSearchIndex(asset);
-                
-                results.imported++;
-            } catch (error) {
-                results.errors.push({
-                    asset: assetData.name,
-                    error: error.message
-                });
-            }
-        }
-
-        this.updateCacheSize();
-        this.notifyAssetsImported(results);
-        return results;
-    }
-
-    // Event Handling
-    setupEventListeners() {
-        // Set up drag and drop for the whole window
-        window.addEventListener('dragover', this.handleDragOver.bind(this));
-        window.addEventListener('drop', this.handleDrop.bind(this));
-    }
-
-    handleDragOver(e) {
-        e.preventDefault();
-        e.dataTransfer.dropEffect = 'copy';
-    }
-
-    async handleDrop(e) {
-        e.preventDefault();
-        
-        const files = Array.from(e.dataTransfer.files)
-            .filter(file => this.isValidFormat(file.type));
-        
-        if (files.length > 0) {
-            const results = await this.addAssetsFromFiles(files);
-            this.notifyAssetsDropped(results);
-        }
-    }
-
-    // Event Notifications
-    notifyAssetAdded(asset) {
-        this.dispatchEvent('assetAdded', { asset });
-    }
-
-    notifyAssetDeleted(asset) {
-        this.dispatchEvent('assetDeleted', { asset });
-    }
-
-    notifyAssetsImported(results) {
-        this.dispatchEvent('assetsImported', results);
-    }
-
-    notifyAssetsDropped(results) {
-        this.dispatchEvent('assetsDropped', results);
-    }
-
-    dispatchEvent(type, data) {
-        if (typeof window !== 'undefined') {
-            const event = new CustomEvent(`assets:${type}`, { detail: data });
-            window.dispatchEvent(event);
-        }
-    }
-
-    // Statistics
+    // Asset Statistics
     getStats() {
         const assets = this.getAllAssets();
         const totalSize = assets.reduce((sum, asset) => sum + asset.size, 0);
-        
         const typeStats = {};
+        
         assets.forEach(asset => {
             typeStats[asset.type] = (typeStats[asset.type] || 0) + 1;
         });
-
-        const categoryStats = {};
-        this.categories.forEach((assetIds, category) => {
-            categoryStats[category] = assetIds.size;
-        });
-
+        
         return {
             totalAssets: assets.length,
-            totalSize,
-            formattedSize: this.getFileSize(totalSize),
-            categories: Object.keys(categoryStats).length,
-            tags: this.tags.size,
+            totalSize: totalSize,
+            formattedSize: this.formatFileSize(totalSize),
             typeBreakdown: typeStats,
-            categoryBreakdown: categoryStats,
-            cacheSize: this.cache.size,
-            loadingCount: this.loadingPromises.size
+            categoryBreakdown: this.getCategoryStats(),
+            usedAssets: assets.filter(asset => asset.used).length,
+            unusedAssets: assets.filter(asset => !asset.used).length
         };
+    }
+
+    // Cleanup
+    clearAssets() {
+        this.assets.clear();
+        this.thumbnails.clear();
+        this.categories.clear();
+        this.usageCount.clear();
+        
+        window.dispatchEvent(new CustomEvent('assets:cleared'));
+        console.log('🧹 All assets cleared');
+    }
+
+    dispose() {
+        this.clearAssets();
+        console.log('🧹 Asset Loader disposed');
     }
 }
 

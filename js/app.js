@@ -1,6 +1,6 @@
 /**
  * Main Application - Animation Studio
- * Coordinates all modules and provides the main application interface
+ * Robust, user-friendly animation tool with proper error handling and intuitive UI
  */
 
 class AnimationStudio {
@@ -11,91 +11,113 @@ class AnimationStudio {
         this.playbackEngine = null;
         this.assetLoader = null;
         this.projectExporter = null;
-        this.dragDropHandler = null;
-        this.propertiesPanel = null;
-        this.timelineUI = null;
-        this.audioEngine = null;
         
         this.isInitialized = false;
         this.currentProject = null;
+        this.isDemoMode = true; // Start with demo content
         
-        this.init();
+        // Wait for DOM to be ready
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', () => this.init());
+        } else {
+            this.init();
+        }
     }
 
     async init() {
         try {
-            // Initialize core components
+            this.showLoadingScreen();
+            
+            // Initialize core components in order
             await this.initializeCanvas();
-            this.initializeTimeline();
-            this.initializeAssetLoader();
-            this.initializePlaybackEngine();
-            this.initializeProjectExporter();
+            await this.initializeTimeline();
+            await this.initializeAssetLoader();
+            await this.initializePlaybackEngine();
+            await this.initializeProjectExporter();
             
-            // Initialize UI components
+            // Initialize UI
             this.initializeUI();
-            this.initializeDragDrop();
-            this.initializePropertiesPanel();
-            this.initializeTimelineUI();
-            this.initializeAudioEngine();
-            
-            // Set up event listeners
             this.setupEventListeners();
             this.setupKeyboardShortcuts();
             
-            // Load default assets and setup
-            await this.loadDefaultAssets();
-            this.setupWelcomeScreen();
+            // Load demo content
+            await this.loadDemoContent();
+            
+            this.hideLoadingScreen();
+            this.showWelcomeMessage();
             
             this.isInitialized = true;
-            console.log('Animation Studio initialized successfully');
+            console.log('✅ Animation Studio initialized successfully');
             
         } catch (error) {
-            console.error('Failed to initialize Animation Studio:', error);
-            this.showError('Failed to initialize application: ' + error.message);
+            console.error('❌ Failed to initialize Animation Studio:', error);
+            this.showFatalError(error);
         }
     }
 
-    initializeCanvas() {
+    // Canvas Initialization
+    async initializeCanvas() {
         this.canvas = document.getElementById('animationCanvas');
         if (!this.canvas) {
-            throw new Error('Canvas element not found');
+            throw new Error('Canvas element not found. Please check HTML structure.');
         }
         
-        // Set up canvas for high DPI displays
+        // Initialize canvas with proper sizing
+        this.resizeCanvas();
+        this.canvasEngine = new CanvasEngine(this.canvas);
+        
+        // Set up responsive canvas
+        window.addEventListener('resize', () => this.resizeCanvas());
+        
+        console.log('✅ Canvas engine initialized');
+    }
+
+    resizeCanvas() {
+        const container = this.canvas.parentElement;
+        const rect = container.getBoundingClientRect();
         const dpr = window.devicePixelRatio || 1;
-        const rect = this.canvas.getBoundingClientRect();
         
-        this.canvas.width = rect.width * dpr;
-        this.canvas.height = rect.height * dpr;
-        this.canvas.style.width = rect.width + 'px';
-        this.canvas.style.height = rect.height + 'px';
+        // Set canvas size to container size
+        const width = Math.floor(rect.width);
+        const height = Math.floor(rect.height);
         
+        this.canvas.width = width * dpr;
+        this.canvas.height = height * dpr;
+        this.canvas.style.width = width + 'px';
+        this.canvas.style.height = height + 'px';
+        
+        // Scale context for high DPI
         const ctx = this.canvas.getContext('2d');
         ctx.scale(dpr, dpr);
         
-        this.canvasEngine = new CanvasEngine(this.canvas);
-        
-        // Set up canvas responsive behavior
-        this.setupCanvasResize();
+        // Re-render if canvas engine exists
+        if (this.canvasEngine) {
+            this.canvasEngine.render();
+        }
     }
 
-    initializeTimeline() {
+    // Timeline Initialization
+    async initializeTimeline() {
         this.timeline = new Timeline();
-        
-        // Set default timeline settings
         this.timeline.duration = 10;
         this.timeline.fps = 30;
+        console.log('✅ Timeline initialized');
     }
 
-    initializeAssetLoader() {
+    // Asset Loader Initialization
+    async initializeAssetLoader() {
         this.assetLoader = new AssetLoader();
+        console.log('✅ Asset loader initialized');
     }
 
-    initializePlaybackEngine() {
+    // Playback Engine Initialization
+    async initializePlaybackEngine() {
         this.playbackEngine = new PlaybackEngine(this.canvasEngine, this.timeline);
+        console.log('✅ Playback engine initialized');
     }
 
-    initializeProjectExporter() {
+    // Project Exporter Initialization
+    async initializeProjectExporter() {
         this.projectExporter = new ProjectExporter(
             this.canvasEngine,
             this.timeline,
@@ -104,96 +126,47 @@ class AnimationStudio {
         );
         
         // Enable auto-save
-        this.projectExporter.enableAutoSave(5); // Auto-save every 5 minutes
+        this.projectExporter.enableAutoSave(2); // Auto-save every 2 minutes
+        console.log('✅ Project exporter initialized');
     }
 
+    // UI Initialization
     initializeUI() {
-        // Initialize zoom controls
-        this.setupZoomControls();
-        
-        // Initialize playback controls
-        this.setupPlaybackControls();
-        
-        // Initialize toolbar
         this.setupToolbar();
-        
-        // Initialize export controls
-        this.setupExportControls();
-        
-        // Initialize project controls
-        this.setupProjectControls();
-    }
-
-    initializeDragDrop() {
-        // Asset panel drag and drop
-        this.setupAssetDragDrop();
-        
-        // Canvas drop zone for assets
-        this.setupCanvasDropZone();
-    }
-
-    initializePropertiesPanel() {
-        // Properties panel will be implemented in properties-panel.js
-        // For now, set up basic property binding
+        this.setupPlaybackControls();
+        this.setupAssetPanel();
         this.setupPropertiesPanel();
-    }
-
-    initializeTimelineUI() {
-        // Timeline UI will be implemented in timeline-ui.js
-        // For now, set up basic timeline rendering
         this.setupTimelineUI();
+        this.setupProjectControls();
+        this.setupExportControls();
+        console.log('✅ UI initialized');
     }
 
-    initializeAudioEngine() {
-        // Basic audio engine setup
-        this.setupAudioEngine();
-    }
-
-    // Canvas Setup
-    setupCanvasResize() {
-        const resizeObserver = new ResizeObserver((entries) => {
-            for (const entry of entries) {
-                const { width, height } = entry.contentRect;
-                const dpr = window.devicePixelRatio || 1;
+    // Toolbar Setup
+    setupToolbar() {
+        const toolButtons = document.querySelectorAll('.tool-btn');
+        
+        toolButtons.forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                e.preventDefault();
                 
-                this.canvas.width = width * dpr;
-                this.canvas.height = height * dpr;
-                this.canvas.style.width = width + 'px';
-                this.canvas.style.height = height + 'px';
+                // Remove active class from all buttons
+                toolButtons.forEach(b => b.classList.remove('active'));
                 
-                const ctx = this.canvas.getContext('2d');
-                ctx.scale(dpr, dpr);
+                // Add active class to clicked button
+                btn.classList.add('active');
                 
-                if (this.canvasEngine) {
-                    this.canvasEngine.render();
+                // Set tool in canvas engine
+                const tool = btn.dataset.tool;
+                if (tool && this.canvasEngine) {
+                    this.canvasEngine.setTool(tool);
+                    this.showNotification(`${tool.charAt(0).toUpperCase() + tool.slice(1)} tool selected`, 'info');
                 }
-            }
+            });
         });
-        
-        const canvasWrapper = this.canvas.parentElement;
-        resizeObserver.observe(canvasWrapper);
     }
 
-    setupZoomControls() {
-        const zoomSlider = document.getElementById('zoomSlider');
-        const zoomValue = document.getElementById('zoomValue');
-        
-        if (zoomSlider && zoomValue) {
-            zoomSlider.addEventListener('input', (e) => {
-                const zoom = parseInt(e.target.value) / 100;
-                this.canvasEngine.setZoom(zoom);
-                zoomValue.textContent = e.target.value + '%';
-            });
-            
-            // Update zoom display when zoom changes
-            this.canvasEngine.canvas.addEventListener('zoomChanged', (e) => {
-                const zoomPercent = Math.round(e.detail.zoom * 100);
-                zoomSlider.value = zoomPercent;
-                zoomValue.textContent = zoomPercent + '%';
-            });
-        }
-    }
-
+    // Playback Controls Setup
     setupPlaybackControls() {
         const playBtn = document.getElementById('playBtn');
         const pauseBtn = document.getElementById('pauseBtn');
@@ -204,28 +177,44 @@ class AnimationStudio {
         const durationInput = document.getElementById('timelineDuration');
         const fpsSelect = document.getElementById('timelineFPS');
         
+        // Playback buttons
         if (playBtn) {
-            playBtn.addEventListener('click', () => this.playbackEngine.play());
+            playBtn.addEventListener('click', () => {
+                this.playbackEngine.play();
+                this.showNotification('Animation playing', 'info');
+            });
         }
         
         if (pauseBtn) {
-            pauseBtn.addEventListener('click', () => this.playbackEngine.pause());
+            pauseBtn.addEventListener('click', () => {
+                this.playbackEngine.pause();
+                this.showNotification('Animation paused', 'info');
+            });
         }
         
         if (stopBtn) {
-            stopBtn.addEventListener('click', () => this.playbackEngine.stop());
+            stopBtn.addEventListener('click', () => {
+                this.playbackEngine.stop();
+                this.showNotification('Animation stopped', 'info');
+            });
         }
         
         if (rewindBtn) {
-            rewindBtn.addEventListener('click', () => this.playbackEngine.setCurrentTime(0));
+            rewindBtn.addEventListener('click', () => {
+                this.playbackEngine.setCurrentTime(0);
+                this.showNotification('Rewound to start', 'info');
+            });
         }
         
+        // Timeline settings
         if (durationInput) {
             durationInput.addEventListener('change', (e) => {
-                this.timeline.duration = parseFloat(e.target.value);
+                const duration = Math.max(1, Math.min(300, parseFloat(e.target.value)));
+                this.timeline.duration = duration;
                 if (totalTimeSpan) {
-                    totalTimeSpan.textContent = this.timeline.formatTime(this.timeline.duration);
+                    totalTimeSpan.textContent = this.timeline.formatTime(duration);
                 }
+                this.renderTimeline();
             });
         }
         
@@ -247,41 +236,143 @@ class AnimationStudio {
         if (totalTimeSpan) {
             totalTimeSpan.textContent = this.timeline.formatTime(this.timeline.duration);
         }
+        if (currentTimeSpan) {
+            currentTimeSpan.textContent = this.timeline.formatTime(0);
+        }
     }
 
-    setupToolbar() {
-        const toolButtons = document.querySelectorAll('.tool-btn');
+    // Asset Panel Setup
+    setupAssetPanel() {
+        const uploadBtn = document.getElementById('uploadBtn');
+        const assetUpload = document.getElementById('assetUpload');
         
-        toolButtons.forEach(btn => {
-            btn.addEventListener('click', (e) => {
-                // Remove active class from all buttons
-                toolButtons.forEach(b => b.classList.remove('active'));
-                
-                // Add active class to clicked button
-                btn.classList.add('active');
-                
-                // Set tool in canvas engine
-                const tool = btn.dataset.tool;
-                if (tool && this.canvasEngine) {
-                    this.canvasEngine.setTool(tool);
+        if (uploadBtn && assetUpload) {
+            uploadBtn.addEventListener('click', () => assetUpload.click());
+            
+            assetUpload.addEventListener('change', async (e) => {
+                const files = Array.from(e.target.files);
+                if (files.length > 0) {
+                    await this.handleAssetUpload(files);
                 }
+                // Reset input to allow uploading same file again
+                e.target.value = '';
             });
+        }
+        
+        // Update asset list when assets change
+        window.addEventListener('assets:assetAdded', () => this.updateAssetList());
+        window.addEventListener('assets:assetDeleted', () => this.updateAssetList());
+        
+        // Setup canvas drop zone
+        this.setupCanvasDropZone();
+    }
+
+    // Canvas Drop Zone Setup
+    setupCanvasDropZone() {
+        const canvasWrapper = this.canvas.parentElement;
+        
+        canvasWrapper.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            e.dataTransfer.dropEffect = 'copy';
+            canvasWrapper.classList.add('drag-over');
+        });
+        
+        canvasWrapper.addEventListener('dragleave', (e) => {
+            if (!canvasWrapper.contains(e.relatedTarget)) {
+                canvasWrapper.classList.remove('drag-over');
+            }
+        });
+        
+        canvasWrapper.addEventListener('drop', async (e) => {
+            e.preventDefault();
+            canvasWrapper.classList.remove('drag-over');
+            
+            const files = Array.from(e.dataTransfer.files);
+            const imageFiles = files.filter(file => file.type.startsWith('image/'));
+            
+            if (imageFiles.length > 0) {
+                // Upload files first
+                await this.handleAssetUpload(imageFiles);
+                
+                // Add the first uploaded asset to canvas
+                const rect = this.canvas.getBoundingClientRect();
+                const x = e.clientX - rect.left;
+                const y = e.clientY - rect.top;
+                
+                // Get the last uploaded asset
+                const assets = this.assetLoader.getAllAssets();
+                if (assets.length > 0) {
+                    const lastAsset = assets[assets.length - 1];
+                    await this.addAssetToCanvas(lastAsset.id, x, y);
+                }
+            } else {
+                // Check for asset being dragged from panel
+                const assetId = e.dataTransfer.getData('text/asset-id');
+                if (assetId) {
+                    const rect = this.canvas.getBoundingClientRect();
+                    const x = e.clientX - rect.left;
+                    const y = e.clientY - rect.top;
+                    await this.addAssetToCanvas(assetId, x, y);
+                }
+            }
         });
     }
 
-    setupExportControls() {
-        const exportVideoBtn = document.getElementById('exportVideo');
-        const exportGifBtn = document.getElementById('exportGif');
+    // Properties Panel Setup
+    setupPropertiesPanel() {
+        // Listen for object selection changes
+        this.canvasEngine.canvas.addEventListener('selectionChanged', (e) => {
+            this.updatePropertiesPanel(e.detail.selectedObjects);
+        });
         
-        if (exportVideoBtn) {
-            exportVideoBtn.addEventListener('click', () => this.exportVideo());
+        // Keyframe controls
+        const addKeyframeBtn = document.getElementById('addKeyframe');
+        const deleteKeyframeBtn = document.getElementById('deleteKeyframe');
+        
+        if (addKeyframeBtn) {
+            addKeyframeBtn.addEventListener('click', () => {
+                const selected = this.canvasEngine.selectedObjects;
+                if (selected.length === 0) {
+                    this.showNotification('Please select an object first', 'warning');
+                    return;
+                }
+                
+                const keyframes = this.playbackEngine.addKeyframeForSelectedObjects();
+                this.showNotification(`Added ${keyframes.length} keyframe(s)`, 'success');
+                this.renderTimeline();
+            });
         }
         
-        if (exportGifBtn) {
-            exportGifBtn.addEventListener('click', () => this.exportGIF());
+        if (deleteKeyframeBtn) {
+            deleteKeyframeBtn.addEventListener('click', () => {
+                const selectedKeyframes = this.timeline.getSelectedKeyframes();
+                if (selectedKeyframes.length === 0) {
+                    this.showNotification('No keyframes selected', 'warning');
+                    return;
+                }
+                
+                selectedKeyframes.forEach(kf => this.timeline.deleteKeyframe(kf.id));
+                this.showNotification(`Deleted ${selectedKeyframes.length} keyframe(s)`, 'success');
+                this.renderTimeline();
+            });
         }
     }
 
+    // Timeline UI Setup
+    setupTimelineUI() {
+        const timelineElement = document.getElementById('timeline');
+        if (!timelineElement) return;
+        
+        this.renderTimeline();
+        
+        // Listen for timeline updates
+        window.addEventListener('timeline:keyframeAdded', () => this.renderTimeline());
+        window.addEventListener('timeline:keyframeUpdated', () => this.renderTimeline());
+        window.addEventListener('timeline:keyframeDeleted', () => this.renderTimeline());
+        window.addEventListener('playback:timeChanged', () => this.renderTimeline());
+    }
+
+    // Project Controls Setup
     setupProjectControls() {
         const newProjectBtn = document.getElementById('newProject');
         const loadProjectBtn = document.getElementById('loadProject');
@@ -300,151 +391,567 @@ class AnimationStudio {
         }
     }
 
-    setupAssetDragDrop() {
-        const uploadBtn = document.getElementById('uploadBtn');
-        const assetUpload = document.getElementById('assetUpload');
-        const assetList = document.getElementById('assetList');
+    // Export Controls Setup
+    setupExportControls() {
+        const exportVideoBtn = document.getElementById('exportVideo');
+        const exportGifBtn = document.getElementById('exportGif');
         
-        if (uploadBtn && assetUpload) {
-            uploadBtn.addEventListener('click', () => assetUpload.click());
+        if (exportVideoBtn) {
+            exportVideoBtn.addEventListener('click', () => this.exportVideo());
+        }
+        
+        if (exportGifBtn) {
+            exportGifBtn.addEventListener('click', () => this.exportGIF());
+        }
+    }
+
+    // Asset Management
+    async handleAssetUpload(files) {
+        try {
+            this.showLoadingNotification('Uploading assets...');
             
-            assetUpload.addEventListener('change', async (e) => {
-                const files = Array.from(e.target.files);
-                if (files.length > 0) {
-                    await this.handleAssetUpload(files);
+            const results = await this.assetLoader.addAssetsFromFiles(files);
+            
+            if (results.assets.length > 0) {
+                this.showNotification(`Successfully added ${results.assets.length} asset(s)`, 'success');
+                this.updateAssetList();
+                
+                // Exit demo mode when user uploads assets
+                this.isDemoMode = false;
+            }
+            
+            if (results.errors.length > 0) {
+                console.warn('Asset upload errors:', results.errors);
+                this.showNotification(`${results.errors.length} asset(s) failed to upload`, 'warning');
+            }
+            
+        } catch (error) {
+            console.error('Asset upload failed:', error);
+            this.showError('Failed to upload assets: ' + error.message);
+        }
+    }
+
+    async addAssetToCanvas(assetId, x, y) {
+        const asset = this.assetLoader.getAsset(assetId);
+        if (!asset) {
+            this.showError('Asset not found');
+            return;
+        }
+        
+        try {
+            // Convert screen coordinates to canvas coordinates
+            const canvasPoint = this.canvasEngine.screenToCanvas(x, y);
+            
+            // Add image object to canvas
+            const obj = await this.canvasEngine.addImageObject(
+                asset.src,
+                canvasPoint.x,
+                canvasPoint.y
+            );
+            
+            // Scale down large images
+            if (obj.width > 300 || obj.height > 300) {
+                const scale = Math.min(300 / obj.width, 300 / obj.height);
+                obj.width *= scale;
+                obj.height *= scale;
+                this.canvasEngine.render();
+            }
+            
+            // Mark asset as used
+            this.assetLoader.markAssetUsed(assetId);
+            
+            // Select the new object
+            this.canvasEngine.selectObject(obj.id);
+            
+            // Update scene objects list
+            this.updateSceneObjects();
+            
+            this.showNotification('Asset added to canvas', 'success');
+            
+        } catch (error) {
+            console.error('Failed to add asset to canvas:', error);
+            this.showError('Failed to add asset to canvas');
+        }
+    }
+
+    updateAssetList() {
+        const assetList = document.getElementById('assetList');
+        if (!assetList) return;
+        
+        assetList.innerHTML = '';
+        
+        const assets = this.assetLoader.getAllAssets();
+        
+        if (assets.length === 0) {
+            assetList.innerHTML = '<p class="empty-state">No assets uploaded yet. Click "Upload Assets" to get started!</p>';
+            return;
+        }
+        
+        assets.forEach(asset => {
+            const assetItem = this.createAssetItem(asset);
+            assetList.appendChild(assetItem);
+        });
+    }
+
+    createAssetItem(asset) {
+        const item = document.createElement('div');
+        item.className = 'asset-item';
+        item.draggable = true;
+        item.title = `${asset.name} (${this.formatFileSize(asset.size)})`;
+        
+        const thumbnail = this.assetLoader.getThumbnail(asset.id);
+        
+        item.innerHTML = `
+            <img src="${thumbnail || asset.src}" alt="${asset.name}" loading="lazy">
+            <div class="name">${asset.name}</div>
+        `;
+        
+        // Drag and drop
+        item.addEventListener('dragstart', (e) => {
+            e.dataTransfer.setData('text/asset-id', asset.id);
+            e.dataTransfer.effectAllowed = 'copy';
+        });
+        
+        // Double-click to add to canvas center
+        item.addEventListener('dblclick', () => {
+            const rect = this.canvas.getBoundingClientRect();
+            const centerX = rect.width / 2;
+            const centerY = rect.height / 2;
+            this.addAssetToCanvas(asset.id, centerX, centerY);
+        });
+        
+        return item;
+    }
+
+    // Scene Objects Management
+    updateSceneObjects() {
+        const sceneObjects = document.getElementById('sceneObjects');
+        if (!sceneObjects) return;
+        
+        sceneObjects.innerHTML = '';
+        
+        if (this.canvasEngine.objects.length === 0) {
+            sceneObjects.innerHTML = '<p class="empty-state">No objects in scene. Drag assets to canvas to add objects!</p>';
+            return;
+        }
+        
+        this.canvasEngine.objects.forEach(obj => {
+            const objectItem = this.createSceneObjectItem(obj);
+            sceneObjects.appendChild(objectItem);
+        });
+    }
+
+    createSceneObjectItem(obj) {
+        const item = document.createElement('div');
+        item.className = 'scene-object';
+        
+        if (this.canvasEngine.selectedObjects.find(selected => selected.id === obj.id)) {
+            item.classList.add('selected');
+        }
+        
+        item.innerHTML = `
+            <div class="scene-object-icon">${this.getObjectIcon(obj.type)}</div>
+            <div class="scene-object-info">
+                <div class="scene-object-name">${obj.name || 'Object'}</div>
+                <div class="scene-object-type">${obj.type}</div>
+            </div>
+            <div class="scene-object-controls">
+                <button class="btn-icon" title="Delete" onclick="app.deleteObject('${obj.id}')">🗑️</button>
+            </div>
+        `;
+        
+        item.addEventListener('click', (e) => {
+            if (!e.target.classList.contains('btn-icon')) {
+                this.canvasEngine.selectObject(obj.id);
+            }
+        });
+        
+        return item;
+    }
+
+    deleteObject(objectId) {
+        if (confirm('Are you sure you want to delete this object?')) {
+            this.canvasEngine.deleteObject(objectId);
+            this.updateSceneObjects();
+            this.showNotification('Object deleted', 'success');
+        }
+    }
+
+    getObjectIcon(type) {
+        const icons = {
+            image: '🖼️',
+            text: '📝',
+            shape: '🔷'
+        };
+        return icons[type] || '⬜';
+    }
+
+    // Properties Panel Updates
+    updatePropertiesPanel(selectedObjects) {
+        const propertiesPanel = document.getElementById('objectProperties');
+        if (!propertiesPanel) return;
+        
+        if (selectedObjects.length === 0) {
+            propertiesPanel.innerHTML = '<p class="empty-state">Select an object to edit properties</p>';
+            return;
+        }
+        
+        const obj = selectedObjects[0]; // Handle single selection for now
+        
+        propertiesPanel.innerHTML = `
+            <div class="property-group">
+                <h4>Transform</h4>
+                <div class="property-row">
+                    <label>X:</label>
+                    <input type="number" value="${Math.round(obj.x)}" data-property="x" step="1">
+                </div>
+                <div class="property-row">
+                    <label>Y:</label>
+                    <input type="number" value="${Math.round(obj.y)}" data-property="y" step="1">
+                </div>
+                <div class="property-row">
+                    <label>Width:</label>
+                    <input type="number" value="${Math.round(obj.width)}" data-property="width" step="1" min="1">
+                </div>
+                <div class="property-row">
+                    <label>Height:</label>
+                    <input type="number" value="${Math.round(obj.height)}" data-property="height" step="1" min="1">
+                </div>
+                <div class="property-row">
+                    <label>Rotation:</label>
+                    <input type="number" value="${Math.round(obj.rotation)}" data-property="rotation" step="1">
+                </div>
+                <div class="property-row">
+                    <label>Opacity:</label>
+                    <input type="range" min="0" max="1" step="0.1" value="${obj.opacity}" data-property="opacity">
+                    <span class="value-display">${Math.round(obj.opacity * 100)}%</span>
+                </div>
+            </div>
+            
+            <div class="property-group">
+                <h4>Animation</h4>
+                <button class="btn btn-primary btn-small" onclick="app.addKeyframeForObject('${obj.id}')">
+                    Add Keyframe at Current Time
+                </button>
+            </div>
+        `;
+        
+        // Set up property change listeners
+        const inputs = propertiesPanel.querySelectorAll('input[data-property]');
+        inputs.forEach(input => {
+            input.addEventListener('input', (e) => {
+                const property = e.target.dataset.property;
+                let value = e.target.type === 'range' ? parseFloat(e.target.value) : parseInt(e.target.value);
+                
+                // Validate values
+                if (property === 'width' || property === 'height') {
+                    value = Math.max(1, value);
+                }
+                
+                this.canvasEngine.updateObject(obj.id, { [property]: value });
+                
+                // Update value display for range inputs
+                const valueDisplay = e.target.parentElement.querySelector('.value-display');
+                if (valueDisplay && e.target.type === 'range') {
+                    valueDisplay.textContent = Math.round(value * 100) + '%';
                 }
             });
-        }
-        
-        // Update asset list display
-        window.addEventListener('assets:assetAdded', () => this.updateAssetList());
-        window.addEventListener('assets:assetDeleted', () => this.updateAssetList());
-    }
-
-    setupCanvasDropZone() {
-        const canvasWrapper = this.canvas.parentElement;
-        
-        canvasWrapper.addEventListener('dragover', (e) => {
-            e.preventDefault();
-            canvasWrapper.classList.add('drag-over');
-        });
-        
-        canvasWrapper.addEventListener('dragleave', (e) => {
-            if (!canvasWrapper.contains(e.relatedTarget)) {
-                canvasWrapper.classList.remove('drag-over');
-            }
-        });
-        
-        canvasWrapper.addEventListener('drop', async (e) => {
-            e.preventDefault();
-            canvasWrapper.classList.remove('drag-over');
-            
-            const rect = this.canvas.getBoundingClientRect();
-            const x = e.clientX - rect.left;
-            const y = e.clientY - rect.top;
-            
-            // Check if this is an asset being dragged from the asset panel
-            const assetId = e.dataTransfer.getData('text/asset-id');
-            if (assetId) {
-                await this.addAssetToCanvas(assetId, x, y);
-            }
         });
     }
 
-    setupPropertiesPanel() {
-        // Listen for object selection changes
-        this.canvasEngine.canvas.addEventListener('selectionChanged', (e) => {
-            this.updatePropertiesPanel(e.detail.selectedObjects);
+    addKeyframeForObject(objectId) {
+        const obj = this.canvasEngine.getObject(objectId);
+        if (!obj) return;
+        
+        const keyframe = this.timeline.addKeyframe(objectId, this.timeline.currentTime, {
+            x: obj.x,
+            y: obj.y,
+            rotation: obj.rotation,
+            scaleX: obj.scaleX,
+            scaleY: obj.scaleY,
+            opacity: obj.opacity
         });
         
-        // Set up keyframe controls
-        const addKeyframeBtn = document.getElementById('addKeyframe');
-        const deleteKeyframeBtn = document.getElementById('deleteKeyframe');
-        
-        if (addKeyframeBtn) {
-            addKeyframeBtn.addEventListener('click', () => {
-                this.playbackEngine.addKeyframeForSelectedObjects();
-            });
-        }
-        
-        if (deleteKeyframeBtn) {
-            deleteKeyframeBtn.addEventListener('click', () => {
-                const selectedKeyframes = this.timeline.getSelectedKeyframes();
-                selectedKeyframes.forEach(kf => this.timeline.deleteKeyframe(kf.id));
-            });
-        }
+        this.showNotification('Keyframe added', 'success');
+        this.renderTimeline();
     }
 
-    setupTimelineUI() {
+    // Timeline Rendering
+    renderTimeline() {
         const timelineElement = document.getElementById('timeline');
         if (!timelineElement) return;
         
-        // Basic timeline rendering - this would be enhanced in timeline-ui.js
-        this.renderTimeline();
+        const tracks = this.timeline.getAllTracks();
+        const playheadPosition = (this.timeline.currentTime / this.timeline.duration) * 100;
         
-        // Listen for timeline updates
-        window.addEventListener('timeline:keyframeAdded', () => this.renderTimeline());
-        window.addEventListener('timeline:keyframeUpdated', () => this.renderTimeline());
-        window.addEventListener('timeline:keyframeDeleted', () => this.renderTimeline());
-        window.addEventListener('playback:timeChanged', () => this.renderTimeline());
+        timelineElement.innerHTML = `
+            <div class="timeline-content">
+                <div class="timeline-track-list">
+                    <div class="timeline-track-header">Objects (${tracks.length})</div>
+                    ${tracks.length === 0 ? '<div class="timeline-empty">No animated objects</div>' : 
+                        tracks.map(track => `
+                            <div class="timeline-track-item" data-track-id="${track.id}">
+                                <div class="timeline-track-info">
+                                    <div class="track-name">${track.name}</div>
+                                    <div class="track-type">${track.objectId.substring(0, 8)}...</div>
+                                </div>
+                            </div>
+                        `).join('')
+                    }
+                </div>
+                <div class="timeline-track-content">
+                    <div class="timeline-ruler">
+                        ${this.generateTimelineRuler()}
+                    </div>
+                    <div class="timeline-playhead" style="left: ${playheadPosition}%">
+                        <div class="playhead-handle"></div>
+                    </div>
+                    ${this.generateTimelineKeyframes()}
+                </div>
+            </div>
+        `;
+        
+        // Make timeline interactive
+        this.makeTimelineInteractive();
     }
 
-    setupAudioEngine() {
-        const uploadAudioBtn = document.getElementById('uploadAudio');
-        const audioUpload = document.getElementById('audioUpload');
+    generateTimelineRuler() {
+        const duration = this.timeline.duration;
+        const marks = [];
         
-        if (uploadAudioBtn && audioUpload) {
-            uploadAudioBtn.addEventListener('click', () => audioUpload.click());
+        for (let i = 0; i <= duration; i++) {
+            const position = (i / duration) * 100;
+            marks.push(`
+                <div class="ruler-mark" style="left: ${position}%">
+                    <span class="time-label">${i}s</span>
+                </div>
+            `);
+        }
+        
+        return marks.join('');
+    }
+
+    generateTimelineKeyframes() {
+        const keyframeElements = [];
+        
+        for (const [trackId, keyframes] of this.timeline.keyframes.entries()) {
+            keyframes.forEach(keyframe => {
+                const position = (keyframe.time / this.timeline.duration) * 100;
+                keyframeElements.push(`
+                    <div class="keyframe" 
+                         style="left: ${position}%" 
+                         data-keyframe-id="${keyframe.id}"
+                         title="Keyframe at ${keyframe.time.toFixed(2)}s">
+                    </div>
+                `);
+            });
+        }
+        
+        return keyframeElements.join('');
+    }
+
+    makeTimelineInteractive() {
+        const timelineContent = document.querySelector('.timeline-track-content');
+        if (!timelineContent) return;
+        
+        // Timeline scrubbing
+        timelineContent.addEventListener('click', (e) => {
+            const rect = timelineContent.getBoundingClientRect();
+            const x = e.clientX - rect.left;
+            const percentage = x / rect.width;
+            const time = percentage * this.timeline.duration;
             
-            audioUpload.addEventListener('change', (e) => {
-                const file = e.target.files[0];
-                if (file) {
-                    this.loadAudioFile(file);
+            this.playbackEngine.setCurrentTime(Math.max(0, Math.min(this.timeline.duration, time)));
+        });
+        
+        // Keyframe selection
+        const keyframes = timelineContent.querySelectorAll('.keyframe');
+        keyframes.forEach(kf => {
+            kf.addEventListener('click', (e) => {
+                e.stopPropagation();
+                const keyframeId = kf.dataset.keyframeId;
+                
+                // Toggle selection
+                if (kf.classList.contains('selected')) {
+                    kf.classList.remove('selected');
+                } else {
+                    // Clear other selections if not holding Ctrl
+                    if (!e.ctrlKey) {
+                        keyframes.forEach(other => other.classList.remove('selected'));
+                    }
+                    kf.classList.add('selected');
                 }
             });
+        });
+    }
+
+    // Project Management
+    newProject() {
+        if (this.projectExporter.isDirty) {
+            if (!confirm('You have unsaved changes. Create new project anyway?')) {
+                return;
+            }
+        }
+        
+        const name = prompt('Project name:', 'New Project');
+        if (name) {
+            this.projectExporter.createNewProject(name);
+            this.updateSceneObjects();
+            this.updateAssetList();
+            this.renderTimeline();
+            this.showNotification('New project created', 'success');
+        }
+    }
+
+    saveProject() {
+        try {
+            this.projectExporter.saveProject();
+            this.showNotification('Project saved successfully', 'success');
+        } catch (error) {
+            console.error('Save failed:', error);
+            this.showError('Failed to save project: ' + error.message);
+        }
+    }
+
+    loadProject() {
+        const input = document.createElement('input');
+        input.type = 'file';
+        input.accept = '.json';
+        
+        input.addEventListener('change', async (e) => {
+            const file = e.target.files[0];
+            if (file) {
+                try {
+                    this.showLoadingNotification('Loading project...');
+                    const success = await this.projectExporter.loadProjectFromFile(file);
+                    if (success) {
+                        this.updateSceneObjects();
+                        this.updateAssetList();
+                        this.renderTimeline();
+                        this.showNotification('Project loaded successfully', 'success');
+                    } else {
+                        this.showError('Failed to load project');
+                    }
+                } catch (error) {
+                    console.error('Load failed:', error);
+                    this.showError('Failed to load project: ' + error.message);
+                }
+            }
+        });
+        
+        input.click();
+    }
+
+    // Export Functions
+    async exportVideo() {
+        if (this.canvasEngine.objects.length === 0) {
+            this.showNotification('Add some objects to the canvas before exporting', 'warning');
+            return;
+        }
+        
+        const modal = this.showExportModal();
+        
+        try {
+            const result = await this.projectExporter.exportToWebM({
+                onProgress: (progressValue) => {
+                    this.updateExportProgress(progressValue * 100);
+                }
+            });
+            
+            this.projectExporter.downloadWebM(result.blob);
+            this.showNotification('Video exported successfully', 'success');
+            
+        } catch (error) {
+            console.error('Video export failed:', error);
+            this.showError('Video export failed: ' + error.message);
+        } finally {
+            this.hideExportModal();
+        }
+    }
+
+    async exportGIF() {
+        if (this.canvasEngine.objects.length === 0) {
+            this.showNotification('Add some objects to the canvas before exporting', 'warning');
+            return;
+        }
+        
+        this.showNotification('GIF export is coming soon! Use video export for now.', 'info');
+    }
+
+    // Demo Content
+    async loadDemoContent() {
+        try {
+            // Add a welcome text
+            const textObj = this.canvasEngine.addTextObject('Welcome to AnimationStudio!', 400, 200);
+            textObj.fontSize = 32;
+            textObj.color = '#00d4ff';
+            
+            // Add a demo shape
+            const shapeObj = this.canvasEngine.addShapeObject('rectangle', 400, 350);
+            shapeObj.fill = '#ff6b6b';
+            shapeObj.width = 200;
+            shapeObj.height = 100;
+            
+            // Add some keyframes for demo
+            this.timeline.addKeyframe(textObj.id, 0, {
+                x: 400, y: 200, opacity: 1, rotation: 0
+            });
+            this.timeline.addKeyframe(textObj.id, 3, {
+                x: 600, y: 200, opacity: 1, rotation: 10
+            });
+            this.timeline.addKeyframe(textObj.id, 6, {
+                x: 400, y: 200, opacity: 1, rotation: 0
+            });
+            
+            this.timeline.addKeyframe(shapeObj.id, 0, {
+                x: 400, y: 350, scaleX: 1, scaleY: 1
+            });
+            this.timeline.addKeyframe(shapeObj.id, 2, {
+                x: 400, y: 300, scaleX: 1.2, scaleY: 1.2
+            });
+            this.timeline.addKeyframe(shapeObj.id, 4, {
+                x: 400, y: 350, scaleX: 1, scaleY: 1
+            });
+            
+            this.updateSceneObjects();
+            this.renderTimeline();
+            this.canvasEngine.render();
+            
+        } catch (error) {
+            console.warn('Failed to load demo content:', error);
         }
     }
 
     // Event Listeners
     setupEventListeners() {
         // Canvas events
-        this.canvasEngine.canvas.addEventListener('objectCreated', (e) => {
+        this.canvasEngine.canvas.addEventListener('objectCreated', () => {
             this.updateSceneObjects();
         });
         
-        this.canvasEngine.canvas.addEventListener('objectDeleted', (e) => {
+        this.canvasEngine.canvas.addEventListener('objectDeleted', () => {
             this.updateSceneObjects();
         });
         
-        this.canvasEngine.canvas.addEventListener('selectionChanged', (e) => {
+        this.canvasEngine.canvas.addEventListener('selectionChanged', () => {
             this.updateSceneObjects();
         });
         
         // Project events
-        window.addEventListener('project:projectSaved', (e) => {
+        window.addEventListener('project:projectSaved', () => {
             this.showNotification('Project saved successfully', 'success');
         });
         
         window.addEventListener('project:exportComplete', (e) => {
-            this.handleExportComplete(e.detail);
+            this.showNotification(`${e.detail.format.toUpperCase()} export completed`, 'success');
         });
         
         window.addEventListener('project:exportError', (e) => {
             this.showError('Export failed: ' + e.detail.message);
         });
-        
-        // Asset events
-        window.addEventListener('assets:assetsDropped', (e) => {
-            const { assets, errors } = e.detail;
-            if (assets.length > 0) {
-                this.showNotification(`Added ${assets.length} asset(s)`, 'success');
-            }
-            if (errors.length > 0) {
-                this.showError(`Failed to add ${errors.length} asset(s)`);
-            }
-        });
     }
 
+    // Keyboard Shortcuts
     setupKeyboardShortcuts() {
         document.addEventListener('keydown', (e) => {
             // Don't trigger shortcuts when typing in inputs
@@ -455,7 +962,7 @@ class AnimationStudio {
             const ctrl = e.ctrlKey || e.metaKey;
             
             switch (e.key) {
-                case ' ': // Spacebar - play/pause
+                case ' ':
                     e.preventDefault();
                     if (this.playbackEngine.isPlaying) {
                         this.playbackEngine.pause();
@@ -491,409 +998,72 @@ class AnimationStudio {
                         this.exportVideo();
                     }
                     break;
-                    
-                case 'z':
-                    if (ctrl) {
-                        e.preventDefault();
-                        // Undo functionality would go here
-                        console.log('Undo (not implemented)');
-                    }
-                    break;
-                    
-                case 'y':
-                    if (ctrl) {
-                        e.preventDefault();
-                        // Redo functionality would go here
-                        console.log('Redo (not implemented)');
-                    }
-                    break;
             }
         });
     }
 
-    // Asset Management
-    async handleAssetUpload(files) {
-        try {
-            const results = await this.assetLoader.addAssetsFromFiles(files);
-            
-            if (results.assets.length > 0) {
-                this.showNotification(`Successfully added ${results.assets.length} asset(s)`, 'success');
-            }
-            
-            if (results.errors.length > 0) {
-                console.warn('Asset upload errors:', results.errors);
-                this.showNotification(`Failed to add ${results.errors.length} asset(s)`, 'warning');
-            }
-            
-            this.updateAssetList();
-            
-        } catch (error) {
-            console.error('Asset upload failed:', error);
-            this.showError('Failed to upload assets: ' + error.message);
-        }
-    }
-
-    async addAssetToCanvas(assetId, x, y) {
-        const asset = this.assetLoader.getAsset(assetId);
-        if (!asset) return;
-        
-        try {
-            // Convert screen coordinates to canvas coordinates
-            const canvasPoint = this.canvasEngine.screenToCanvas(x, y);
-            
-            // Add image object to canvas
-            const obj = await this.canvasEngine.addImageObject(
-                asset.src,
-                canvasPoint.x,
-                canvasPoint.y
-            );
-            
-            // Mark asset as used
-            this.assetLoader.markAssetUsed(assetId);
-            
-            // Select the new object
-            this.canvasEngine.selectObject(obj.id);
-            
-        } catch (error) {
-            console.error('Failed to add asset to canvas:', error);
-            this.showError('Failed to add asset to canvas');
-        }
-    }
-
-    updateAssetList() {
-        const assetList = document.getElementById('assetList');
-        if (!assetList) return;
-        
-        assetList.innerHTML = '';
-        
-        const assets = this.assetLoader.getAllAssets();
-        assets.forEach(asset => {
-            const assetItem = this.createAssetItem(asset);
-            assetList.appendChild(assetItem);
-        });
-    }
-
-    createAssetItem(asset) {
-        const item = document.createElement('div');
-        item.className = 'asset-item';
-        item.draggable = true;
-        
-        const thumbnail = this.assetLoader.getThumbnail(asset.id);
-        
-        item.innerHTML = `
-            <img src="${thumbnail || asset.src}" alt="${asset.name}">
-            <div class="name">${asset.name}</div>
-        `;
-        
-        // Set up drag and drop
-        item.addEventListener('dragstart', (e) => {
-            e.dataTransfer.setData('text/asset-id', asset.id);
-        });
-        
-        // Double-click to add to canvas center
-        item.addEventListener('dblclick', () => {
-            const centerX = this.canvas.width / 2;
-            const centerY = this.canvas.height / 2;
-            this.addAssetToCanvas(asset.id, centerX, centerY);
-        });
-        
-        return item;
-    }
-
-    // Scene Management
-    updateSceneObjects() {
-        const sceneObjects = document.getElementById('sceneObjects');
-        if (!sceneObjects) return;
-        
-        sceneObjects.innerHTML = '';
-        
-        this.canvasEngine.objects.forEach(obj => {
-            const objectItem = this.createSceneObjectItem(obj);
-            sceneObjects.appendChild(objectItem);
-        });
-    }
-
-    createSceneObjectItem(obj) {
-        const item = document.createElement('div');
-        item.className = 'scene-object';
-        
-        if (this.canvasEngine.selectedObjects.find(selected => selected.id === obj.id)) {
-            item.classList.add('selected');
-        }
-        
-        item.innerHTML = `
-            <div class="scene-object-icon">${this.getObjectIcon(obj.type)}</div>
-            <div class="scene-object-info">
-                <div class="scene-object-name">${obj.name || 'Object'}</div>
-                <div class="scene-object-type">${obj.type}</div>
+    // UI Helper Methods
+    showLoadingScreen() {
+        const loading = document.createElement('div');
+        loading.id = 'loadingScreen';
+        loading.className = 'loading-screen';
+        loading.innerHTML = `
+            <div class="loading-content">
+                <div class="spinner"></div>
+                <h2>Loading AnimationStudio...</h2>
+                <p>Initializing components...</p>
             </div>
         `;
-        
-        item.addEventListener('click', () => {
-            this.canvasEngine.selectObject(obj.id);
-        });
-        
-        return item;
+        document.body.appendChild(loading);
     }
 
-    getObjectIcon(type) {
-        const icons = {
-            image: '🖼️',
-            text: '📝',
-            shape: '🔷'
-        };
-        return icons[type] || '⬜';
-    }
-
-    // Properties Panel
-    updatePropertiesPanel(selectedObjects) {
-        const propertiesPanel = document.getElementById('objectProperties');
-        if (!propertiesPanel) return;
-        
-        if (selectedObjects.length === 0) {
-            propertiesPanel.innerHTML = '<p>Select an object to edit properties</p>';
-            return;
-        }
-        
-        const obj = selectedObjects[0]; // For now, just handle single selection
-        
-        propertiesPanel.innerHTML = `
-            <div class="property-group">
-                <h4>Transform</h4>
-                <div class="property-row">
-                    <label>X:</label>
-                    <input type="number" value="${Math.round(obj.x)}" data-property="x">
-                </div>
-                <div class="property-row">
-                    <label>Y:</label>
-                    <input type="number" value="${Math.round(obj.y)}" data-property="y">
-                </div>
-                <div class="property-row">
-                    <label>Width:</label>
-                    <input type="number" value="${Math.round(obj.width)}" data-property="width">
-                </div>
-                <div class="property-row">
-                    <label>Height:</label>
-                    <input type="number" value="${Math.round(obj.height)}" data-property="height">
-                </div>
-                <div class="property-row">
-                    <label>Rotation:</label>
-                    <input type="number" value="${Math.round(obj.rotation)}" data-property="rotation">
-                </div>
-                <div class="property-row">
-                    <label>Opacity:</label>
-                    <input type="range" min="0" max="1" step="0.1" value="${obj.opacity}" data-property="opacity">
-                </div>
-            </div>
-        `;
-        
-        // Set up property change listeners
-        const inputs = propertiesPanel.querySelectorAll('input[data-property]');
-        inputs.forEach(input => {
-            input.addEventListener('input', (e) => {
-                const property = e.target.dataset.property;
-                const value = property === 'opacity' ? parseFloat(e.target.value) : parseInt(e.target.value);
-                this.canvasEngine.updateObject(obj.id, { [property]: value });
-            });
-        });
-    }
-
-    // Timeline UI
-    renderTimeline() {
-        const timelineElement = document.getElementById('timeline');
-        if (!timelineElement) return;
-        
-        // Basic timeline rendering - this would be much more sophisticated in timeline-ui.js
-        timelineElement.innerHTML = `
-            <div class="timeline-content">
-                <div class="timeline-track-list">
-                    <div class="timeline-track-header">Tracks</div>
-                    ${this.timeline.getAllTracks().map(track => `
-                        <div class="timeline-track-item">
-                            <div class="timeline-track-info">
-                                <div class="track-name">${track.name}</div>
-                                <div class="track-type">${track.objectId}</div>
-                            </div>
-                        </div>
-                    `).join('')}
-                </div>
-                <div class="timeline-track-content">
-                    <div class="timeline-ruler"></div>
-                    <div class="timeline-playhead" style="left: ${(this.timeline.currentTime / this.timeline.duration) * 100}%"></div>
-                </div>
-            </div>
-        `;
-    }
-
-    // Project Management
-    newProject() {
-        if (this.projectExporter.isDirty) {
-            if (!confirm('You have unsaved changes. Create new project anyway?')) {
-                return;
-            }
-        }
-        
-        const name = prompt('Project name:', 'New Project');
-        if (name) {
-            this.projectExporter.createNewProject(name);
-            this.updateSceneObjects();
-            this.updateAssetList();
-            this.renderTimeline();
+    hideLoadingScreen() {
+        const loading = document.getElementById('loadingScreen');
+        if (loading) {
+            loading.remove();
         }
     }
 
-    saveProject() {
-        try {
-            this.projectExporter.saveProject();
-            this.showNotification('Project saved successfully', 'success');
-        } catch (error) {
-            console.error('Save failed:', error);
-            this.showError('Failed to save project: ' + error.message);
-        }
+    showWelcomeMessage() {
+        this.showNotification('Welcome to AnimationStudio! Upload assets or try the demo content.', 'info', 5000);
     }
 
-    loadProject() {
-        const input = document.createElement('input');
-        input.type = 'file';
-        input.accept = '.json';
-        
-        input.addEventListener('change', async (e) => {
-            const file = e.target.files[0];
-            if (file) {
-                try {
-                    const success = await this.projectExporter.loadProjectFromFile(file);
-                    if (success) {
-                        this.showNotification('Project loaded successfully', 'success');
-                        this.updateSceneObjects();
-                        this.updateAssetList();
-                        this.renderTimeline();
-                    } else {
-                        this.showError('Failed to load project');
-                    }
-                } catch (error) {
-                    console.error('Load failed:', error);
-                    this.showError('Failed to load project: ' + error.message);
-                }
-            }
-        });
-        
-        input.click();
-    }
-
-    // Export Functions
-    async exportVideo() {
+    showExportModal() {
         const modal = document.getElementById('exportModal');
+        if (modal) {
+            modal.style.display = 'flex';
+            this.updateExportProgress(0);
+        }
+        return modal;
+    }
+
+    hideExportModal() {
+        const modal = document.getElementById('exportModal');
+        if (modal) {
+            modal.style.display = 'none';
+        }
+    }
+
+    updateExportProgress(percentage) {
         const progress = document.getElementById('exportProgress');
         const status = document.getElementById('exportStatus');
         
-        if (modal) modal.style.display = 'flex';
-        
-        try {
-            if (status) status.textContent = 'Preparing video export...';
-            
-            const result = await this.projectExporter.exportToWebM({
-                onProgress: (progressValue) => {
-                    if (progress) {
-                        progress.style.width = (progressValue * 100) + '%';
-                    }
-                    if (status) {
-                        status.textContent = `Exporting... ${Math.round(progressValue * 100)}%`;
-                    }
-                }
-            });
-            
-            this.projectExporter.downloadWebM(result.blob);
-            this.showNotification('Video exported successfully', 'success');
-            
-        } catch (error) {
-            console.error('Video export failed:', error);
-            this.showError('Video export failed: ' + error.message);
-        } finally {
-            if (modal) modal.style.display = 'none';
+        if (progress) {
+            progress.style.width = percentage + '%';
+        }
+        if (status) {
+            status.textContent = `Exporting... ${Math.round(percentage)}%`;
         }
     }
 
-    async exportGIF() {
-        const modal = document.getElementById('exportModal');
-        const progress = document.getElementById('exportProgress');
-        const status = document.getElementById('exportStatus');
-        
-        if (modal) modal.style.display = 'flex';
-        
-        try {
-            if (status) status.textContent = 'Preparing GIF export...';
-            
-            const result = await this.projectExporter.exportToGIF({
-                onProgress: (progressValue) => {
-                    if (progress) {
-                        progress.style.width = (progressValue * 100) + '%';
-                    }
-                    if (status) {
-                        status.textContent = `Exporting... ${Math.round(progressValue * 100)}%`;
-                    }
-                }
-            });
-            
-            // For now, log the result (in a real implementation, you'd use a GIF library)
-            console.log('GIF export result:', result);
-            this.showNotification('GIF data prepared (requires GIF library for download)', 'info');
-            
-        } catch (error) {
-            console.error('GIF export failed:', error);
-            this.showError('GIF export failed: ' + error.message);
-        } finally {
-            if (modal) modal.style.display = 'none';
-        }
+    showLoadingNotification(message) {
+        this.showNotification(message, 'info', 0); // 0 duration = persistent
     }
 
-    handleExportComplete(data) {
-        console.log('Export complete:', data);
-        this.showNotification(`${data.format.toUpperCase()} export completed`, 'success');
-    }
-
-    // Audio
-    loadAudioFile(file) {
-        // Basic audio file loading - would be enhanced in audio-engine.js
-        const audio = new Audio();
-        audio.src = URL.createObjectURL(file);
-        audio.controls = true;
+    showNotification(message, type = 'info', duration = 3000) {
+        // Remove existing notifications of same type
+        document.querySelectorAll(`.notification-${type}`).forEach(n => n.remove());
         
-        const audioContainer = document.querySelector('.audio-container');
-        if (audioContainer) {
-            audioContainer.style.display = 'block';
-            audioContainer.querySelector('.audio-waveform').innerHTML = '';
-            audioContainer.querySelector('.audio-waveform').appendChild(audio);
-        }
-        
-        this.showNotification('Audio file loaded', 'success');
-    }
-
-    // Default Assets
-    async loadDefaultAssets() {
-        // Could load some default shapes, characters, etc.
-        // For now, we'll add some basic shapes programmatically
-        
-        // Add default text object
-        const textObj = this.canvasEngine.addTextObject('Welcome to Animation Studio!', 200, 100);
-        
-        // Add default shape
-        const shapeObj = this.canvasEngine.addShapeObject('rectangle', 400, 300);
-        
-        this.updateSceneObjects();
-    }
-
-    setupWelcomeScreen() {
-        // Check if this is the first time loading
-        const hasProjects = this.projectExporter.getProjectList().length > 0;
-        
-        if (!hasProjects) {
-            this.showNotification('Welcome to Animation Studio! Upload assets and start creating animations.', 'info');
-        }
-    }
-
-    // UI Helpers
-    showNotification(message, type = 'info') {
-        // Create a simple notification system
         const notification = document.createElement('div');
         notification.className = `notification notification-${type}`;
         notification.textContent = message;
@@ -901,16 +1071,18 @@ class AnimationStudio {
         // Style the notification
         Object.assign(notification.style, {
             position: 'fixed',
-            top: '20px',
+            top: '80px',
             right: '20px',
-            padding: '15px 20px',
+            padding: '12px 20px',
             borderRadius: '6px',
             color: 'white',
             fontWeight: '500',
             zIndex: '10000',
+            maxWidth: '400px',
             opacity: '0',
             transform: 'translateX(100%)',
-            transition: 'all 0.3s ease'
+            transition: 'all 0.3s ease',
+            cursor: 'pointer'
         });
         
         // Set color based on type
@@ -922,6 +1094,13 @@ class AnimationStudio {
         };
         notification.style.backgroundColor = colors[type] || colors.info;
         
+        // Click to dismiss
+        notification.addEventListener('click', () => {
+            notification.style.opacity = '0';
+            notification.style.transform = 'translateX(100%)';
+            setTimeout(() => notification.remove(), 300);
+        });
+        
         document.body.appendChild(notification);
         
         // Animate in
@@ -930,48 +1109,74 @@ class AnimationStudio {
             notification.style.transform = 'translateX(0)';
         }, 100);
         
-        // Auto-remove after 5 seconds
-        setTimeout(() => {
-            notification.style.opacity = '0';
-            notification.style.transform = 'translateX(100%)';
+        // Auto-remove
+        if (duration > 0) {
             setTimeout(() => {
                 if (notification.parentNode) {
-                    notification.parentNode.removeChild(notification);
+                    notification.style.opacity = '0';
+                    notification.style.transform = 'translateX(100%)';
+                    setTimeout(() => notification.remove(), 300);
                 }
-            }, 300);
-        }, 5000);
+            }, duration);
+        }
     }
 
     showError(message) {
-        this.showNotification(message, 'error');
+        this.showNotification(message, 'error', 5000);
         console.error(message);
     }
 
+    showFatalError(error) {
+        const errorScreen = document.createElement('div');
+        errorScreen.className = 'error-screen';
+        errorScreen.innerHTML = `
+            <div class="error-content">
+                <h1>❌ Failed to Initialize</h1>
+                <p>AnimationStudio failed to start properly.</p>
+                <pre>${error.message}</pre>
+                <button onclick="location.reload()" class="btn btn-primary">Reload Page</button>
+            </div>
+        `;
+        
+        Object.assign(errorScreen.style, {
+            position: 'fixed',
+            top: '0',
+            left: '0',
+            width: '100%',
+            height: '100%',
+            background: '#1a1a1a',
+            color: 'white',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: '20000'
+        });
+        
+        document.body.appendChild(errorScreen);
+    }
+
+    formatFileSize(bytes) {
+        if (bytes === 0) return '0 Bytes';
+        const k = 1024;
+        const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+        const i = Math.floor(Math.log(bytes) / Math.log(k));
+        return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+    }
+
     // Public API
-    getCanvasEngine() {
-        return this.canvasEngine;
-    }
-
-    getTimeline() {
-        return this.timeline;
-    }
-
-    getPlaybackEngine() {
-        return this.playbackEngine;
-    }
-
-    getAssetLoader() {
-        return this.assetLoader;
-    }
-
-    getProjectExporter() {
-        return this.projectExporter;
-    }
+    getCanvasEngine() { return this.canvasEngine; }
+    getTimeline() { return this.timeline; }
+    getPlaybackEngine() { return this.playbackEngine; }
+    getAssetLoader() { return this.assetLoader; }
+    getProjectExporter() { return this.projectExporter; }
 }
 
-// Initialize the application when the DOM is loaded
+// Initialize the application and make it globally accessible
+let app;
 document.addEventListener('DOMContentLoaded', () => {
-    window.animationStudio = new AnimationStudio();
+    app = new AnimationStudio();
+    window.animationStudio = app;
+    window.app = app; // For easier console access
 });
 
 // Export for use in other modules

@@ -1,37 +1,48 @@
 /**
- * Playback Engine - Animation Rendering and Playback Coordination
- * Coordinates between CanvasEngine and Timeline for smooth animation playback
+ * Playback Engine - Animation playback and object synchronization
+ * Handles real-time animation playback, object updates, and timeline sync
  */
 
 class PlaybackEngine {
     constructor(canvasEngine, timeline) {
         this.canvasEngine = canvasEngine;
         this.timeline = timeline;
+        
         this.isPlaying = false;
-        this.currentFrame = 0;
+        this.isPaused = false;
+        this.playbackStartTime = 0;
+        this.animationFrameId = null;
         this.playbackSpeed = 1;
         this.loop = false;
-        this.renderCallback = null;
-        this.preRenderCallback = null;
-        this.postRenderCallback = null;
-        
-        // Performance tracking
-        this.frameTime = 0;
-        this.renderTime = 0;
-        this.lastFrameTime = 0;
-        this.frameCount = 0;
-        this.fps = 0;
         this.targetFPS = 30;
         
-        // Animation state
-        this.interpolationCache = new Map();
-        this.lastUpdateTime = 0;
-        this.smoothPlayback = true;
-        this.renderOnlyChanges = true;
+        // Object states for interpolation
         this.objectStates = new Map();
+        this.lastUpdateTime = 0;
+        
+        // Performance monitoring
+        this.frameCount = 0;
+        this.lastFPSUpdate = 0;
+        this.currentFPS = 0;
         
         this.setupEventListeners();
-        this.bindTimelineEvents();
+        console.log('✅ Playback Engine initialized');
+    }
+
+    // Event Listeners
+    setupEventListeners() {
+        // Listen for timeline changes
+        window.addEventListener('timeline:keyframeAdded', () => {
+            this.updateObjectStates();
+        });
+        
+        window.addEventListener('timeline:keyframeUpdated', () => {
+            this.updateObjectStates();
+        });
+        
+        window.addEventListener('timeline:keyframeDeleted', () => {
+            this.updateObjectStates();
+        });
     }
 
     // Playback Control
@@ -39,187 +50,388 @@ class PlaybackEngine {
         if (this.isPlaying) return;
         
         this.isPlaying = true;
-        this.timeline.play();
-        this.updateAnimationLoop();
-        this.notifyPlaybackStateChanged();
+        this.isPaused = false;
+        this.playbackStartTime = performance.now() - (this.timeline.currentTime * 1000 / this.playbackSpeed);
+        this.lastUpdateTime = performance.now();
+        
+        // Update UI elements
+        this.updatePlaybackUI();
+        
+        // Start animation loop
+        this.startAnimationLoop();
+        
+        // Emit event
+        this.emitPlaybackEvent('play');
+        
+        console.log('🎬 Animation playback started');
     }
 
     pause() {
+        if (!this.isPlaying) return;
+        
         this.isPlaying = false;
-        this.timeline.pause();
-        this.notifyPlaybackStateChanged();
+        this.isPaused = true;
+        
+        // Stop animation loop
+        this.stopAnimationLoop();
+        
+        // Update UI elements
+        this.updatePlaybackUI();
+        
+        // Emit event
+        this.emitPlaybackEvent('pause');
+        
+        console.log('⏸️ Animation playback paused');
     }
 
     stop() {
         this.isPlaying = false;
-        this.timeline.stop();
+        this.isPaused = false;
+        
+        // Stop animation loop
+        this.stopAnimationLoop();
+        
+        // Reset to beginning
         this.setCurrentTime(0);
-        this.notifyPlaybackStateChanged();
+        
+        // Update UI elements
+        this.updatePlaybackUI();
+        
+        // Emit event
+        this.emitPlaybackEvent('stop');
+        
+        console.log('⏹️ Animation playback stopped');
     }
 
+    toggle() {
+        if (this.isPlaying) {
+            this.pause();
+        } else {
+            this.play();
+        }
+    }
+
+    // Time Management
     setCurrentTime(time) {
-        this.timeline.setCurrentTime(time);
-        this.updateFrame();
-        this.renderFrame();
+        const clampedTime = Math.max(0, Math.min(this.timeline.duration, time));
+        this.timeline.setCurrentTime(clampedTime);
+        
+        // Update all objects to their state at this time
+        this.updateObjectsToTime(clampedTime);
+        
+        // Re-render canvas
+        this.canvasEngine.render();
+    }
+
+    getCurrentTime() {
+        return this.timeline.currentTime;
     }
 
     setPlaybackSpeed(speed) {
-        this.playbackSpeed = Math.max(0.1, Math.min(4, speed));
-        this.timeline.playbackSpeed = this.playbackSpeed;
+        this.playbackSpeed = Math.max(0.1, Math.min(5, speed));
+        
+        if (this.isPlaying) {
+            // Adjust playback start time to maintain current position
+            this.playbackStartTime = performance.now() - (this.timeline.currentTime * 1000 / this.playbackSpeed);
+        }
+    }
+
+    setTargetFPS(fps) {
+        this.targetFPS = Math.max(1, Math.min(120, fps));
     }
 
     setLoop(loop) {
         this.loop = loop;
-        this.timeline.loop = loop;
     }
 
-    // Frame Management
-    updateFrame() {
-        const currentTime = this.timeline.currentTime;
-        this.currentFrame = this.timeline.timeToFrame(currentTime);
+    // Animation Loop
+    startAnimationLoop() {
+        if (this.animationFrameId) {
+            cancelAnimationFrame(this.animationFrameId);
+        }
         
-        // Update object properties based on timeline
-        this.canvasEngine.objects.forEach(obj => {
-            this.updateObjectFromTimeline(obj, currentTime);
-        });
+        this.animationLoop();
     }
 
-    updateObjectFromTimeline(obj, time) {
-        const track = this.timeline.getTrack(obj.id);
-        if (!track || !track.visible) return;
+    stopAnimationLoop() {
+        if (this.animationFrameId) {
+            cancelAnimationFrame(this.animationFrameId);
+            this.animationFrameId = null;
+        }
+    }
 
-        const previousState = this.objectStates.get(obj.id) || {};
-        let hasChanges = false;
+    animationLoop() {
+        if (!this.isPlaying) return;
+        
+        const currentTime = performance.now();
+        const deltaTime = currentTime - this.lastUpdateTime;
+        
+        // Calculate timeline position
+        const elapsed = (currentTime - this.playbackStartTime) * this.playbackSpeed / 1000;
+        
+        // Check if we've reached the end
+        if (elapsed >= this.timeline.duration) {
+            if (this.loop) {
+                // Loop back to beginning
+                this.playbackStartTime = currentTime;
+                this.setCurrentTime(0);
+            } else {
+                // Stop at end
+                this.setCurrentTime(this.timeline.duration);
+                this.stop();
+                return;
+            }
+        } else {
+            this.setCurrentTime(elapsed);
+        }
+        
+        // Update FPS counter
+        this.updateFPSCounter(currentTime);
+        
+        this.lastUpdateTime = currentTime;
+        
+        // Schedule next frame
+        this.animationFrameId = requestAnimationFrame(() => this.animationLoop());
+    }
 
-        // Update animated properties
-        track.properties.forEach(property => {
-            const value = this.timeline.getValueAtTime(obj.id, property, time);
-            if (value !== null && value !== undefined) {
-                if (obj[property] !== value) {
-                    obj[property] = value;
-                    hasChanges = true;
-                }
+    // Object State Management
+    updateObjectsToTime(time) {
+        // Get all objects from canvas engine
+        const objects = this.canvasEngine.objects;
+        
+        objects.forEach(obj => {
+            // Get interpolated state for this object at current time
+            const state = this.timeline.getObjectStateAtTime(obj.id, time);
+            
+            if (state) {
+                // Apply interpolated properties to object
+                Object.assign(obj, state);
             }
         });
+    }
 
-        // Cache object state for optimization
-        if (hasChanges || !this.renderOnlyChanges) {
-            this.objectStates.set(obj.id, {
+    updateObjectStates() {
+        // Called when keyframes change - update cached states if needed
+        this.updateObjectsToTime(this.timeline.currentTime);
+        this.canvasEngine.render();
+    }
+
+    // Keyframe Management
+    addKeyframeForSelectedObjects() {
+        const selectedObjects = this.canvasEngine.selectedObjects;
+        const addedKeyframes = [];
+        
+        selectedObjects.forEach(obj => {
+            // Capture current object state
+            const properties = {
                 x: obj.x,
                 y: obj.y,
+                width: obj.width,
+                height: obj.height,
                 rotation: obj.rotation,
-                scaleX: obj.scaleX,
-                scaleY: obj.scaleY,
-                opacity: obj.opacity,
-                visible: obj.visible
-            });
-        }
-    }
-
-    renderFrame() {
-        const startTime = performance.now();
+                scaleX: obj.scaleX || 1,
+                scaleY: obj.scaleY || 1,
+                opacity: obj.opacity !== undefined ? obj.opacity : 1
+            };
+            
+            // Add keyframe at current time
+            const keyframe = this.timeline.addKeyframe(
+                obj.id,
+                this.timeline.currentTime,
+                properties
+            );
+            
+            addedKeyframes.push(keyframe);
+        });
         
-        if (this.preRenderCallback) {
-            this.preRenderCallback(this.currentFrame, this.timeline.currentTime);
-        }
-
-        // Render the canvas
-        this.canvasEngine.render();
-
-        if (this.postRenderCallback) {
-            this.postRenderCallback(this.currentFrame, this.timeline.currentTime);
-        }
-
-        if (this.renderCallback) {
-            this.renderCallback(this.currentFrame, this.timeline.currentTime);
-        }
-
-        // Update performance metrics
-        this.renderTime = performance.now() - startTime;
-        this.updatePerformanceMetrics();
+        return addedKeyframes;
     }
 
-    updateAnimationLoop() {
-        if (!this.isPlaying) return;
-
-        const currentTime = performance.now();
-        this.frameTime = currentTime - this.lastFrameTime;
-        this.lastFrameTime = currentTime;
-
-        // Update timeline (this triggers the time change events)
-        // Timeline handles its own playback loop
-
-        // Schedule next frame
-        requestAnimationFrame(() => this.updateAnimationLoop());
+    addKeyframeForObject(objectId) {
+        const obj = this.canvasEngine.getObject(objectId);
+        if (!obj) return null;
+        
+        const properties = {
+            x: obj.x,
+            y: obj.y,
+            width: obj.width,
+            height: obj.height,
+            rotation: obj.rotation,
+            scaleX: obj.scaleX || 1,
+            scaleY: obj.scaleY || 1,
+            opacity: obj.opacity !== undefined ? obj.opacity : 1
+        };
+        
+        return this.timeline.addKeyframe(objectId, this.timeline.currentTime, properties);
     }
 
-    // Performance Monitoring
-    updatePerformanceMetrics() {
+    removeKeyframeAtCurrentTime(objectId) {
+        const keyframes = this.timeline.getKeyframesForObject(objectId);
+        const currentTime = this.timeline.currentTime;
+        
+        const keyframe = keyframes.find(kf => Math.abs(kf.time - currentTime) < 0.01);
+        if (keyframe) {
+            return this.timeline.deleteKeyframe(keyframe.id);
+        }
+        
+        return false;
+    }
+
+    // UI Updates
+    updatePlaybackUI() {
+        const playBtn = document.getElementById('playBtn');
+        const pauseBtn = document.getElementById('pauseBtn');
+        
+        if (playBtn && pauseBtn) {
+            if (this.isPlaying) {
+                playBtn.style.display = 'none';
+                pauseBtn.style.display = 'inline-block';
+            } else {
+                playBtn.style.display = 'inline-block';
+                pauseBtn.style.display = 'none';
+            }
+        }
+        
+        // Update FPS display
+        const fpsElement = document.getElementById('fps');
+        if (fpsElement) {
+            fpsElement.textContent = `FPS: ${this.currentFPS}`;
+        }
+    }
+
+    updateFPSCounter(currentTime) {
         this.frameCount++;
         
-        if (this.frameCount % 30 === 0) { // Update FPS every 30 frames
-            this.fps = 1000 / this.frameTime;
+        if (currentTime - this.lastFPSUpdate >= 1000) {
+            this.currentFPS = Math.round(this.frameCount * 1000 / (currentTime - this.lastFPSUpdate));
+            this.frameCount = 0;
+            this.lastFPSUpdate = currentTime;
         }
     }
 
-    getPerformanceStats() {
-        return {
-            fps: Math.round(this.fps),
-            frameTime: Math.round(this.frameTime * 100) / 100,
-            renderTime: Math.round(this.renderTime * 100) / 100,
-            currentFrame: this.currentFrame,
-            totalFrames: this.timeline.timeToFrame(this.timeline.duration),
-            playbackSpeed: this.playbackSpeed,
-            objectCount: this.canvasEngine.objects.length,
-            trackCount: this.timeline.getAllTracks().length
-        };
+    // Navigation
+    goToStart() {
+        this.setCurrentTime(0);
     }
 
-    // Export and Rendering
-    async renderToFrames(options = {}) {
+    goToEnd() {
+        this.setCurrentTime(this.timeline.duration);
+    }
+
+    stepForward() {
+        const frameTime = 1 / this.timeline.fps;
+        this.setCurrentTime(this.timeline.currentTime + frameTime);
+    }
+
+    stepBackward() {
+        const frameTime = 1 / this.timeline.fps;
+        this.setCurrentTime(this.timeline.currentTime - frameTime);
+    }
+
+    jumpToNextKeyframe() {
+        const allKeyframes = this.timeline.getAllKeyframes();
+        const currentTime = this.timeline.currentTime;
+        
+        // Find next keyframe after current time
+        const nextKeyframe = allKeyframes.find(kf => kf.time > currentTime + 0.01);
+        
+        if (nextKeyframe) {
+            this.setCurrentTime(nextKeyframe.time);
+        } else if (allKeyframes.length > 0) {
+            // Jump to first keyframe if at end
+            this.setCurrentTime(allKeyframes[0].time);
+        }
+    }
+
+    jumpToPreviousKeyframe() {
+        const allKeyframes = this.timeline.getAllKeyframes();
+        const currentTime = this.timeline.currentTime;
+        
+        // Find previous keyframe before current time
+        const previousKeyframes = allKeyframes.filter(kf => kf.time < currentTime - 0.01);
+        const previousKeyframe = previousKeyframes[previousKeyframes.length - 1];
+        
+        if (previousKeyframe) {
+            this.setCurrentTime(previousKeyframe.time);
+        } else if (allKeyframes.length > 0) {
+            // Jump to last keyframe if at beginning
+            this.setCurrentTime(allKeyframes[allKeyframes.length - 1].time);
+        }
+    }
+
+    // Preview and Scrubbing
+    previewAtTime(time) {
+        // Temporarily update objects without changing current time
+        const originalTime = this.timeline.currentTime;
+        this.updateObjectsToTime(time);
+        this.canvasEngine.render();
+        
+        // Don't update the timeline's current time - this is just a preview
+        return originalTime;
+    }
+
+    startScrubbing() {
+        this.wasPlaingBeforeScrub = this.isPlaying;
+        if (this.isPlaying) {
+            this.pause();
+        }
+    }
+
+    scrubToTime(time) {
+        this.setCurrentTime(time);
+    }
+
+    endScrubbing() {
+        if (this.wasPlaingBeforeScrub) {
+            this.play();
+        }
+        this.wasPlaingBeforeScrub = false;
+    }
+
+    // Export and Recording
+    async exportFrames(options = {}) {
         const {
             startTime = 0,
             endTime = this.timeline.duration,
             fps = this.timeline.fps,
-            width = this.canvasEngine.canvas.width,
-            height = this.canvasEngine.canvas.height,
-            format = 'image/png',
-            quality = 0.92
+            onProgress = null
         } = options;
-
-        const frames = [];
-        const totalFrames = Math.ceil((endTime - startTime) * fps);
-        const frameTime = 1 / fps;
-
-        // Store current state
-        const originalTime = this.timeline.currentTime;
-        const wasPlaying = this.isPlaying;
         
+        const frames = [];
+        const frameTime = 1 / fps;
+        const totalFrames = Math.ceil((endTime - startTime) * fps);
+        
+        // Store current state
+        const wasPlaying = this.isPlaying;
+        const originalTime = this.timeline.currentTime;
+        
+        // Stop playback
         if (wasPlaying) {
             this.pause();
         }
-
+        
         try {
             for (let i = 0; i < totalFrames; i++) {
                 const time = startTime + (i * frameTime);
                 
-                // Update to specific time
+                // Update to frame time
                 this.setCurrentTime(time);
                 
-                // Render frame
-                this.renderFrame();
-                
                 // Capture frame
-                const frameData = this.canvasEngine.canvas.toDataURL(format, quality);
+                const frameData = this.canvasEngine.canvas.toDataURL('image/png');
                 frames.push({
-                    time,
+                    time: time,
                     frame: i,
                     data: frameData
                 });
-
+                
                 // Report progress
-                const progress = (i + 1) / totalFrames;
-                this.notifyExportProgress(progress, i + 1, totalFrames);
+                if (onProgress) {
+                    onProgress((i + 1) / totalFrames);
+                }
+                
+                // Allow UI to update
+                await new Promise(resolve => setTimeout(resolve, 1));
             }
         } finally {
             // Restore original state
@@ -228,334 +440,128 @@ class PlaybackEngine {
                 this.play();
             }
         }
-
+        
         return frames;
     }
 
-    async exportToVideo(options = {}) {
-        const {
-            format = 'webm',
-            quality = 0.8,
-            framerate = this.timeline.fps
-        } = options;
-
-        // This would require a video encoding library
-        // For now, we'll provide the frame data structure
-        const frames = await this.renderToFrames(options);
-        
+    // Performance Monitoring
+    getPerformanceStats() {
         return {
-            frames,
-            metadata: {
-                duration: this.timeline.duration,
-                fps: framerate,
-                width: this.canvasEngine.canvas.width,
-                height: this.canvasEngine.canvas.height,
-                totalFrames: frames.length,
-                format
-            }
-        };
-    }
-
-    async exportToGIF(options = {}) {
-        const {
-            quality = 10,
-            delay = Math.floor(1000 / this.timeline.fps),
-            repeat = 0
-        } = options;
-
-        const frames = await this.renderToFrames({
-            ...options,
-            format: 'image/png'
-        });
-
-        // This would require a GIF encoding library
-        // For now, return the frame data that can be processed by an external library
-        return {
-            frames: frames.map(f => f.data),
-            options: {
-                quality,
-                delay,
-                repeat,
-                width: this.canvasEngine.canvas.width,
-                height: this.canvasEngine.canvas.height
-            }
-        };
-    }
-
-    // Scrubbing and Preview
-    scrubToTime(time) {
-        const wasPlaying = this.isPlaying;
-        if (wasPlaying) {
-            this.pause();
-        }
-        
-        this.setCurrentTime(time);
-        
-        // Don't auto-resume playing when scrubbing
-        return wasPlaying;
-    }
-
-    scrubToFrame(frame) {
-        const time = this.timeline.frameToTime(frame);
-        return this.scrubToTime(time);
-    }
-
-    previewRange(startTime, endTime, speed = 1) {
-        const originalSpeed = this.playbackSpeed;
-        const originalTime = this.timeline.currentTime;
-        
-        this.setPlaybackSpeed(speed);
-        this.setCurrentTime(startTime);
-        this.play();
-        
-        // Set up a timeout to stop at end time
-        const duration = (endTime - startTime) * 1000 / speed;
-        setTimeout(() => {
-            this.pause();
-            this.setPlaybackSpeed(originalSpeed);
-        }, duration);
-    }
-
-    // Event Handling
-    setupEventListeners() {
-        // Listen for canvas events
-        this.canvasEngine.canvas.addEventListener('objectCreated', (e) => {
-            const obj = e.detail.object;
-            this.handleObjectCreated(obj);
-        });
-
-        this.canvasEngine.canvas.addEventListener('objectDeleted', (e) => {
-            const obj = e.detail.object;
-            this.handleObjectDeleted(obj);
-        });
-
-        this.canvasEngine.canvas.addEventListener('objectUpdated', (e) => {
-            const obj = e.detail.object;
-            this.handleObjectUpdated(obj);
-        });
-    }
-
-    bindTimelineEvents() {
-        // Bind timeline time changes to frame updates
-        this.timeline.onTimeChanged = (time) => {
-            this.updateFrame();
-            this.renderFrame();
-            this.notifyTimeChanged(time);
-        };
-
-        // Listen for timeline events
-        window.addEventListener('timeline:playbackStateChanged', (e) => {
-            this.isPlaying = e.detail.isPlaying;
-        });
-
-        window.addEventListener('timeline:keyframeAdded', (e) => {
-            this.handleKeyframeAdded(e.detail.keyframe);
-        });
-
-        window.addEventListener('timeline:keyframeUpdated', (e) => {
-            this.handleKeyframeUpdated(e.detail.keyframe);
-        });
-    }
-
-    // Object Event Handlers
-    handleObjectCreated(obj) {
-        // Create initial keyframe at current time if timeline is playing
-        if (this.timeline.currentTime > 0) {
-            this.timeline.addKeyframe(obj.id, this.timeline.currentTime, {
-                x: obj.x,
-                y: obj.y,
-                rotation: obj.rotation,
-                scaleX: obj.scaleX,
-                scaleY: obj.scaleY,
-                opacity: obj.opacity
-            });
-        }
-    }
-
-    handleObjectDeleted(obj) {
-        // Clean up timeline data
-        this.timeline.deleteTrack(obj.id);
-        this.objectStates.delete(obj.id);
-        this.interpolationCache.delete(obj.id);
-    }
-
-    handleObjectUpdated(obj) {
-        // Cache the update for performance optimization
-        this.objectStates.set(obj.id, {
-            x: obj.x,
-            y: obj.y,
-            rotation: obj.rotation,
-            scaleX: obj.scaleX,
-            scaleY: obj.scaleY,
-            opacity: obj.opacity,
-            visible: obj.visible
-        });
-    }
-
-    handleKeyframeAdded(keyframe) {
-        // Invalidate interpolation cache for this track
-        this.interpolationCache.delete(keyframe.trackId);
-    }
-
-    handleKeyframeUpdated(keyframe) {
-        // Invalidate interpolation cache for this track
-        this.interpolationCache.delete(keyframe.trackId);
-        
-        // If we're at this keyframe's time, update immediately
-        if (Math.abs(this.timeline.currentTime - keyframe.time) < 0.01) {
-            this.updateFrame();
-            this.renderFrame();
-        }
-    }
-
-    // Keyframe Creation Helpers
-    addKeyframeAtCurrentTime(objectId, properties = null) {
-        const obj = this.canvasEngine.getObject(objectId);
-        if (!obj) return null;
-
-        const keyframeProps = properties || {
-            x: obj.x,
-            y: obj.y,
-            rotation: obj.rotation,
-            scaleX: obj.scaleX,
-            scaleY: obj.scaleY,
-            opacity: obj.opacity
-        };
-
-        return this.timeline.addKeyframe(objectId, this.timeline.currentTime, keyframeProps);
-    }
-
-    addKeyframeForSelectedObjects() {
-        const selectedObjects = this.canvasEngine.selectedObjects;
-        const keyframes = [];
-
-        selectedObjects.forEach(obj => {
-            const keyframe = this.addKeyframeAtCurrentTime(obj.id);
-            if (keyframe) {
-                keyframes.push(keyframe);
-            }
-        });
-
-        return keyframes;
-    }
-
-    // Onion Skinning (Preview of previous/next frames)
-    setOnionSkinning(enabled, framesBefore = 1, framesAfter = 1, opacity = 0.3) {
-        this.onionSkinning = {
-            enabled,
-            framesBefore,
-            framesAfter,
-            opacity
-        };
-    }
-
-    renderWithOnionSkin() {
-        if (!this.onionSkinning?.enabled) {
-            this.renderFrame();
-            return;
-        }
-
-        const currentTime = this.timeline.currentTime;
-        const frameTime = 1 / this.timeline.fps;
-        
-        // Render previous frames
-        for (let i = 1; i <= this.onionSkinning.framesBefore; i++) {
-            const time = currentTime - (i * frameTime);
-            if (time >= 0) {
-                this.setCurrentTime(time);
-                this.canvasEngine.ctx.globalAlpha = this.onionSkinning.opacity / i;
-                this.renderFrame();
-            }
-        }
-
-        // Render next frames
-        for (let i = 1; i <= this.onionSkinning.framesAfter; i++) {
-            const time = currentTime + (i * frameTime);
-            if (time <= this.timeline.duration) {
-                this.setCurrentTime(time);
-                this.canvasEngine.ctx.globalAlpha = this.onionSkinning.opacity / i;
-                this.renderFrame();
-            }
-        }
-
-        // Restore current frame
-        this.canvasEngine.ctx.globalAlpha = 1;
-        this.setCurrentTime(currentTime);
-        this.renderFrame();
-    }
-
-    // Utility Methods
-    getFrameAtTime(time) {
-        return this.timeline.timeToFrame(time);
-    }
-
-    getTimeAtFrame(frame) {
-        return this.timeline.frameToTime(frame);
-    }
-
-    getTotalFrames() {
-        return this.timeline.timeToFrame(this.timeline.duration);
-    }
-
-    getCurrentProgress() {
-        return this.timeline.currentTime / this.timeline.duration;
-    }
-
-    // Event Notifications
-    notifyPlaybackStateChanged() {
-        this.dispatchEvent('playbackStateChanged', {
+            currentFPS: this.currentFPS,
+            targetFPS: this.targetFPS,
             isPlaying: this.isPlaying,
+            playbackSpeed: this.playbackSpeed,
             currentTime: this.timeline.currentTime,
-            currentFrame: this.currentFrame,
-            playbackSpeed: this.playbackSpeed
-        });
+            duration: this.timeline.duration,
+            progress: this.timeline.currentTime / this.timeline.duration,
+            objectCount: this.canvasEngine.objects.length,
+            keyframeCount: this.timeline.getAllKeyframes().length
+        };
     }
 
-    notifyTimeChanged(time) {
-        this.dispatchEvent('timeChanged', {
-            currentTime: time,
-            currentFrame: this.getFrameAtTime(time),
-            formattedTime: this.timeline.formatTime(time),
-            progress: time / this.timeline.duration
+    // Event Management
+    emitPlaybackEvent(type, data = {}) {
+        const event = new CustomEvent(`playback:${type}`, {
+            detail: {
+                currentTime: this.timeline.currentTime,
+                isPlaying: this.isPlaying,
+                playbackSpeed: this.playbackSpeed,
+                ...data
+            }
         });
+        
+        window.dispatchEvent(event);
     }
 
-    notifyExportProgress(progress, currentFrame, totalFrames) {
-        this.dispatchEvent('exportProgress', {
-            progress,
-            currentFrame,
-            totalFrames,
-            percentage: Math.round(progress * 100)
-        });
-    }
-
-    dispatchEvent(type, data) {
-        if (typeof window !== 'undefined') {
-            const event = new CustomEvent(`playback:${type}`, { detail: data });
-            window.dispatchEvent(event);
+    // Quality Control
+    setRenderQuality(quality) {
+        // quality: 'low', 'medium', 'high'
+        const canvas = this.canvasEngine.canvas;
+        const ctx = this.canvasEngine.ctx;
+        
+        switch (quality) {
+            case 'low':
+                ctx.imageSmoothingEnabled = false;
+                this.targetFPS = 15;
+                break;
+            case 'medium':
+                ctx.imageSmoothingEnabled = true;
+                ctx.imageSmoothingQuality = 'low';
+                this.targetFPS = 30;
+                break;
+            case 'high':
+                ctx.imageSmoothingEnabled = true;
+                ctx.imageSmoothingQuality = 'high';
+                this.targetFPS = 60;
+                break;
         }
     }
 
-    // Advanced Features
-    setTargetFPS(fps) {
-        this.targetFPS = fps;
-        this.timeline.fps = fps;
+    // Synchronization
+    syncWithAudio(audioElement) {
+        if (!audioElement) return;
+        
+        // Basic audio sync - could be enhanced
+        const syncInterval = setInterval(() => {
+            if (this.isPlaying && !audioElement.paused) {
+                const audioTime = audioElement.currentTime;
+                const timelineDiff = Math.abs(this.timeline.currentTime - audioTime);
+                
+                // Sync if difference is significant
+                if (timelineDiff > 0.1) {
+                    this.setCurrentTime(audioTime);
+                }
+            }
+        }, 100);
+        
+        // Clean up on stop
+        const cleanup = () => {
+            clearInterval(syncInterval);
+        };
+        
+        audioElement.addEventListener('ended', cleanup);
+        audioElement.addEventListener('pause', cleanup);
+        
+        return cleanup;
     }
 
-    enableSmoothing(enabled) {
-        this.smoothPlayback = enabled;
+    // Utilities
+    formatCurrentTime() {
+        return this.timeline.formatTime(this.timeline.currentTime);
     }
 
-    enableChangeOptimization(enabled) {
-        this.renderOnlyChanges = enabled;
+    formatDuration() {
+        return this.timeline.formatTime(this.timeline.duration);
     }
 
-    // Cleanup
-    destroy() {
-        this.pause();
-        this.interpolationCache.clear();
+    getPlaybackProgress() {
+        return this.timeline.duration > 0 ? this.timeline.currentTime / this.timeline.duration : 0;
+    }
+
+    // Memory Management
+    dispose() {
+        this.stop();
         this.objectStates.clear();
-        this.timeline.onTimeChanged = null;
+        
+        // Remove event listeners if needed
+        // (In this implementation, we use global event listeners)
+        
+        console.log('🧹 Playback Engine disposed');
+    }
+
+    // Debugging
+    debug() {
+        return {
+            isPlaying: this.isPlaying,
+            isPaused: this.isPaused,
+            currentTime: this.timeline.currentTime,
+            duration: this.timeline.duration,
+            playbackSpeed: this.playbackSpeed,
+            fps: this.currentFPS,
+            objectCount: this.canvasEngine.objects.length,
+            keyframeCount: this.timeline.getAllKeyframes().length,
+            selectedObjects: this.canvasEngine.selectedObjects.length
+        };
     }
 }
 

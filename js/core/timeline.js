@@ -1,6 +1,6 @@
 /**
- * Timeline Engine - Keyframe Animation and Timeline Management
- * Handles keyframes, interpolation, animation tracks, and timeline logic
+ * Timeline - Animation timeline and keyframe management
+ * Handles animation tracks, keyframes, and temporal data
  */
 
 class Timeline {
@@ -9,552 +9,568 @@ class Timeline {
         this.fps = 30;
         this.currentTime = 0;
         this.isPlaying = false;
-        this.tracks = new Map(); // objectId -> track data
-        this.keyframes = new Map(); // trackId -> keyframes array
-        this.interpolationTypes = {
-            LINEAR: 'linear',
-            EASE_IN: 'easeIn',
-            EASE_OUT: 'easeOut',
-            EASE_IN_OUT: 'easeInOut',
-            BEZIER: 'bezier'
-        };
-        this.playbackSpeed = 1;
-        this.loop = false;
-        this.onUpdate = null;
-        this.onTimeChanged = null;
-        this.playbackStartTime = 0;
-        this.animationFrameId = null;
+        
+        // Keyframes organized by object ID
+        this.keyframes = new Map(); // objectId -> [keyframes]
+        this.tracks = new Map(); // trackId -> track info
+        
+        // Animation properties that can be keyframed
+        this.animatableProperties = [
+            'x', 'y', 'width', 'height', 
+            'rotation', 'scaleX', 'scaleY', 
+            'opacity', 'visible'
+        ];
+        
+        console.log('✅ Timeline initialized');
     }
 
-    // Track Management
-    createTrack(objectId, properties = {}) {
-        const track = {
-            id: `track_${objectId}`,
-            objectId: objectId,
-            name: properties.name || `Track ${objectId}`,
-            visible: properties.visible !== undefined ? properties.visible : true,
-            locked: properties.locked || false,
-            muted: properties.muted || false,
-            solo: properties.solo || false,
-            color: properties.color || this.getRandomTrackColor(),
-            properties: properties.animatedProperties || ['x', 'y', 'rotation', 'scaleX', 'scaleY', 'opacity'],
-            created: Date.now()
-        };
-
-        this.tracks.set(objectId, track);
-        this.keyframes.set(track.id, []);
-        this.notifyTrackCreated(track);
-        return track;
+    // Time Management
+    setCurrentTime(time) {
+        this.currentTime = Math.max(0, Math.min(this.duration, time));
+        
+        // Emit time changed event
+        window.dispatchEvent(new CustomEvent('playback:timeChanged', {
+            detail: { 
+                currentTime: this.currentTime,
+                formattedTime: this.formatTime(this.currentTime)
+            }
+        }));
     }
 
-    deleteTrack(objectId) {
-        const track = this.tracks.get(objectId);
-        if (track) {
-            this.tracks.delete(objectId);
-            this.keyframes.delete(track.id);
-            this.notifyTrackDeleted(track);
+    getCurrentTime() {
+        return this.currentTime;
+    }
+
+    setDuration(duration) {
+        this.duration = Math.max(0.1, duration);
+        
+        // Clamp current time to new duration
+        if (this.currentTime > this.duration) {
+            this.setCurrentTime(this.duration);
         }
     }
 
-    getTrack(objectId) {
-        return this.tracks.get(objectId);
+    getDuration() {
+        return this.duration;
+    }
+
+    setFPS(fps) {
+        this.fps = Math.max(1, Math.min(120, fps));
+    }
+
+    getFPS() {
+        return this.fps;
+    }
+
+    formatTime(seconds) {
+        const minutes = Math.floor(seconds / 60);
+        const remainingSeconds = Math.floor(seconds % 60);
+        const centiseconds = Math.floor((seconds % 1) * 100);
+        
+        if (minutes > 0) {
+            return `${minutes}:${remainingSeconds.toString().padStart(2, '0')}.${centiseconds.toString().padStart(2, '0')}`;
+        } else {
+            return `${remainingSeconds}.${centiseconds.toString().padStart(2, '0')}`;
+        }
+    }
+
+    // Track Management
+    createTrack(objectId, objectName) {
+        const trackId = this.generateTrackId();
+        const track = {
+            id: trackId,
+            objectId: objectId,
+            name: objectName || `Track ${this.tracks.size + 1}`,
+            visible: true,
+            locked: false,
+            color: this.generateTrackColor(),
+            keyframeCount: 0
+        };
+        
+        this.tracks.set(trackId, track);
+        
+        // Initialize keyframe array for this object
+        if (!this.keyframes.has(objectId)) {
+            this.keyframes.set(objectId, []);
+        }
+        
+        return track;
+    }
+
+    getTrack(trackId) {
+        return this.tracks.get(trackId);
+    }
+
+    getTrackByObjectId(objectId) {
+        for (const [trackId, track] of this.tracks) {
+            if (track.objectId === objectId) {
+                return track;
+            }
+        }
+        return null;
     }
 
     getAllTracks() {
         return Array.from(this.tracks.values());
     }
 
+    deleteTrack(trackId) {
+        const track = this.tracks.get(trackId);
+        if (track) {
+            // Delete all keyframes for this track
+            this.keyframes.delete(track.objectId);
+            this.tracks.delete(trackId);
+            
+            window.dispatchEvent(new CustomEvent('timeline:trackDeleted', {
+                detail: { trackId, objectId: track.objectId }
+            }));
+        }
+    }
+
     // Keyframe Management
     addKeyframe(objectId, time, properties) {
-        let track = this.getTrack(objectId);
+        // Ensure we have a track for this object
+        let track = this.getTrackByObjectId(objectId);
         if (!track) {
-            track = this.createTrack(objectId);
+            track = this.createTrack(objectId, `Object ${objectId.substring(0, 8)}`);
         }
-
+        
+        // Get or create keyframe array for this object
+        if (!this.keyframes.has(objectId)) {
+            this.keyframes.set(objectId, []);
+        }
+        
+        const keyframeArray = this.keyframes.get(objectId);
+        
+        // Check if keyframe already exists at this time
+        const existingIndex = keyframeArray.findIndex(kf => Math.abs(kf.time - time) < 0.01);
+        
         const keyframe = {
-            id: `keyframe_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
-            trackId: track.id,
-            time: this.clampTime(time),
+            id: this.generateKeyframeId(),
+            objectId: objectId,
+            time: time,
             properties: { ...properties },
-            interpolation: this.interpolationTypes.LINEAR,
-            easeStrength: 0.5,
-            selected: false,
-            created: Date.now()
+            easingType: 'linear',
+            easingParams: {},
+            selected: false
         };
-
-        const keyframes = this.keyframes.get(track.id);
-        keyframes.push(keyframe);
-        keyframes.sort((a, b) => a.time - b.time);
-
-        this.notifyKeyframeAdded(keyframe);
+        
+        if (existingIndex !== -1) {
+            // Update existing keyframe
+            keyframe.id = keyframeArray[existingIndex].id;
+            keyframeArray[existingIndex] = keyframe;
+        } else {
+            // Add new keyframe and sort by time
+            keyframeArray.push(keyframe);
+            keyframeArray.sort((a, b) => a.time - b.time);
+        }
+        
+        // Update track keyframe count
+        track.keyframeCount = keyframeArray.length;
+        
+        // Emit event
+        window.dispatchEvent(new CustomEvent('timeline:keyframeAdded', {
+            detail: { keyframe, objectId }
+        }));
+        
         return keyframe;
     }
 
-    deleteKeyframe(keyframeId) {
-        for (const [trackId, keyframes] of this.keyframes.entries()) {
-            const index = keyframes.findIndex(kf => kf.id === keyframeId);
-            if (index !== -1) {
-                const keyframe = keyframes[index];
-                keyframes.splice(index, 1);
-                this.notifyKeyframeDeleted(keyframe);
-                return true;
-            }
-        }
-        return false;
-    }
-
-    updateKeyframe(keyframeId, updates) {
-        for (const keyframes of this.keyframes.values()) {
-            const keyframe = keyframes.find(kf => kf.id === keyframeId);
+    getKeyframe(keyframeId) {
+        for (const keyframeArray of this.keyframes.values()) {
+            const keyframe = keyframeArray.find(kf => kf.id === keyframeId);
             if (keyframe) {
-                Object.assign(keyframe, updates);
-                if (updates.time !== undefined) {
-                    keyframe.time = this.clampTime(updates.time);
-                    keyframes.sort((a, b) => a.time - b.time);
-                }
-                this.notifyKeyframeUpdated(keyframe);
                 return keyframe;
             }
         }
         return null;
     }
 
-    getKeyframe(keyframeId) {
-        for (const keyframes of this.keyframes.values()) {
-            const keyframe = keyframes.find(kf => kf.id === keyframeId);
-            if (keyframe) return keyframe;
-        }
-        return null;
-    }
-
-    getKeyframesForTrack(trackId) {
-        return this.keyframes.get(trackId) || [];
-    }
-
     getKeyframesAtTime(time, tolerance = 0.01) {
-        const result = [];
-        for (const keyframes of this.keyframes.values()) {
-            const found = keyframes.filter(kf => Math.abs(kf.time - time) <= tolerance);
-            result.push(...found);
-        }
-        return result;
-    }
-
-    // Animation and Interpolation
-    getValueAtTime(objectId, property, time) {
-        const track = this.getTrack(objectId);
-        if (!track) return null;
-
-        const keyframes = this.getKeyframesForTrack(track.id)
-            .filter(kf => kf.properties.hasOwnProperty(property))
-            .sort((a, b) => a.time - b.time);
-
-        if (keyframes.length === 0) return null;
-
-        // If time is before first keyframe
-        if (time <= keyframes[0].time) {
-            return keyframes[0].properties[property];
-        }
-
-        // If time is after last keyframe
-        if (time >= keyframes[keyframes.length - 1].time) {
-            return keyframes[keyframes.length - 1].properties[property];
-        }
-
-        // Find surrounding keyframes
-        let prevKeyframe = null;
-        let nextKeyframe = null;
-
-        for (let i = 0; i < keyframes.length - 1; i++) {
-            if (keyframes[i].time <= time && keyframes[i + 1].time >= time) {
-                prevKeyframe = keyframes[i];
-                nextKeyframe = keyframes[i + 1];
-                break;
+        const keyframes = [];
+        
+        for (const keyframeArray of this.keyframes.values()) {
+            const keyframe = keyframeArray.find(kf => Math.abs(kf.time - time) <= tolerance);
+            if (keyframe) {
+                keyframes.push(keyframe);
             }
         }
-
-        if (!prevKeyframe || !nextKeyframe) {
-            return keyframes[keyframes.length - 1].properties[property];
-        }
-
-        // Calculate interpolation
-        const duration = nextKeyframe.time - prevKeyframe.time;
-        const progress = (time - prevKeyframe.time) / duration;
         
-        return this.interpolateValue(
-            prevKeyframe.properties[property],
-            nextKeyframe.properties[property],
-            progress,
-            prevKeyframe.interpolation,
-            prevKeyframe.easeStrength
-        );
+        return keyframes;
     }
 
-    interpolateValue(startValue, endValue, progress, interpolationType = 'linear', easeStrength = 0.5) {
-        let easedProgress = progress;
+    getKeyframesForObject(objectId) {
+        return this.keyframes.get(objectId) || [];
+    }
 
-        switch (interpolationType) {
-            case this.interpolationTypes.LINEAR:
-                easedProgress = progress;
-                break;
-            case this.interpolationTypes.EASE_IN:
-                easedProgress = this.easeIn(progress, easeStrength);
-                break;
-            case this.interpolationTypes.EASE_OUT:
-                easedProgress = this.easeOut(progress, easeStrength);
-                break;
-            case this.interpolationTypes.EASE_IN_OUT:
-                easedProgress = this.easeInOut(progress, easeStrength);
-                break;
-            case this.interpolationTypes.BEZIER:
-                easedProgress = this.cubicBezier(progress, 0.25, 0.1, 0.25, 1);
-                break;
+    getAllKeyframes() {
+        const allKeyframes = [];
+        for (const keyframeArray of this.keyframes.values()) {
+            allKeyframes.push(...keyframeArray);
         }
-
-        // Handle different value types
-        if (typeof startValue === 'number' && typeof endValue === 'number') {
-            return startValue + (endValue - startValue) * easedProgress;
-        }
-
-        if (typeof startValue === 'string' && typeof endValue === 'string') {
-            // For colors or other string values, just return the end value for now
-            // Could be enhanced to interpolate colors
-            return progress < 0.5 ? startValue : endValue;
-        }
-
-        return endValue;
+        return allKeyframes.sort((a, b) => a.time - b.time);
     }
 
-    // Easing Functions
-    easeIn(t, strength = 2) {
-        return Math.pow(t, strength);
-    }
-
-    easeOut(t, strength = 2) {
-        return 1 - Math.pow(1 - t, strength);
-    }
-
-    easeInOut(t, strength = 2) {
-        if (t < 0.5) {
-            return Math.pow(2 * t, strength) / 2;
-        } else {
-            return 1 - Math.pow(2 * (1 - t), strength) / 2;
-        }
-    }
-
-    cubicBezier(t, x1, y1, x2, y2) {
-        // Simplified cubic bezier - could be enhanced with proper bezier calculation
-        const c = 3 * x1;
-        const b = 3 * (x2 - x1) - c;
-        const a = 1 - c - b;
-        return ((a * t + b) * t + c) * t;
-    }
-
-    // Playback Control
-    play() {
-        if (this.isPlaying) return;
-        
-        this.isPlaying = true;
-        this.playbackStartTime = performance.now() - (this.currentTime * 1000 / this.playbackSpeed);
-        this.updateLoop();
-        this.notifyPlaybackStateChanged();
-    }
-
-    pause() {
-        this.isPlaying = false;
-        if (this.animationFrameId) {
-            cancelAnimationFrame(this.animationFrameId);
-            this.animationFrameId = null;
-        }
-        this.notifyPlaybackStateChanged();
-    }
-
-    stop() {
-        this.pause();
-        this.setCurrentTime(0);
-    }
-
-    setCurrentTime(time) {
-        this.currentTime = this.clampTime(time);
-        this.notifyTimeChanged();
-        if (this.onTimeChanged) {
-            this.onTimeChanged(this.currentTime);
-        }
-    }
-
-    updateLoop() {
-        if (!this.isPlaying) return;
-
-        const now = performance.now();
-        const elapsed = (now - this.playbackStartTime) * this.playbackSpeed / 1000;
-        
-        if (elapsed >= this.duration) {
-            if (this.loop) {
-                this.playbackStartTime = now;
-                this.setCurrentTime(0);
-            } else {
-                this.setCurrentTime(this.duration);
-                this.pause();
-                return;
+    updateKeyframe(keyframeId, updates) {
+        const keyframe = this.getKeyframe(keyframeId);
+        if (keyframe) {
+            Object.assign(keyframe, updates);
+            
+            // Re-sort keyframes if time changed
+            if ('time' in updates) {
+                const keyframeArray = this.keyframes.get(keyframe.objectId);
+                keyframeArray.sort((a, b) => a.time - b.time);
             }
-        } else {
-            this.setCurrentTime(elapsed);
+            
+            window.dispatchEvent(new CustomEvent('timeline:keyframeUpdated', {
+                detail: { keyframe }
+            }));
         }
-
-        this.animationFrameId = requestAnimationFrame(() => this.updateLoop());
     }
 
-    // Timeline Utilities
-    clampTime(time) {
-        return Math.max(0, Math.min(this.duration, time));
-    }
-
-    timeToFrame(time) {
-        return Math.round(time * this.fps);
-    }
-
-    frameToTime(frame) {
-        return frame / this.fps;
-    }
-
-    formatTime(seconds) {
-        const mins = Math.floor(seconds / 60);
-        const secs = Math.floor(seconds % 60);
-        const ms = Math.floor((seconds % 1) * 100);
-        return `${mins}:${secs.toString().padStart(2, '0')}.${ms.toString().padStart(2, '0')}`;
-    }
-
-    // Bulk Operations
-    deleteKeyframesInRange(startTime, endTime) {
-        const deletedKeyframes = [];
-        
-        for (const [trackId, keyframes] of this.keyframes.entries()) {
-            for (let i = keyframes.length - 1; i >= 0; i--) {
-                const keyframe = keyframes[i];
-                if (keyframe.time >= startTime && keyframe.time <= endTime) {
-                    deletedKeyframes.push(keyframe);
-                    keyframes.splice(i, 1);
+    deleteKeyframe(keyframeId) {
+        for (const [objectId, keyframeArray] of this.keyframes) {
+            const index = keyframeArray.findIndex(kf => kf.id === keyframeId);
+            if (index !== -1) {
+                const keyframe = keyframeArray[index];
+                keyframeArray.splice(index, 1);
+                
+                // Update track keyframe count
+                const track = this.getTrackByObjectId(objectId);
+                if (track) {
+                    track.keyframeCount = keyframeArray.length;
                 }
-            }
-        }
-
-        deletedKeyframes.forEach(kf => this.notifyKeyframeDeleted(kf));
-        return deletedKeyframes;
-    }
-
-    moveKeyframes(keyframeIds, timeOffset) {
-        const movedKeyframes = [];
-        
-        keyframeIds.forEach(id => {
-            const keyframe = this.getKeyframe(id);
-            if (keyframe) {
-                keyframe.time = this.clampTime(keyframe.time + timeOffset);
-                movedKeyframes.push(keyframe);
-            }
-        });
-
-        // Re-sort keyframes in their tracks
-        for (const keyframes of this.keyframes.values()) {
-            keyframes.sort((a, b) => a.time - b.time);
-        }
-
-        movedKeyframes.forEach(kf => this.notifyKeyframeUpdated(kf));
-        return movedKeyframes;
-    }
-
-    duplicateKeyframes(keyframeIds, timeOffset = 1) {
-        const duplicatedKeyframes = [];
-        
-        keyframeIds.forEach(id => {
-            const keyframe = this.getKeyframe(id);
-            if (keyframe) {
-                const duplicate = {
-                    ...keyframe,
-                    id: `keyframe_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
-                    time: this.clampTime(keyframe.time + timeOffset),
-                    created: Date.now()
-                };
                 
-                const keyframes = this.keyframes.get(keyframe.trackId);
-                keyframes.push(duplicate);
-                keyframes.sort((a, b) => a.time - b.time);
+                window.dispatchEvent(new CustomEvent('timeline:keyframeDeleted', {
+                    detail: { keyframe, objectId }
+                }));
                 
-                duplicatedKeyframes.push(duplicate);
-                this.notifyKeyframeAdded(duplicate);
+                return true;
             }
-        });
-
-        return duplicatedKeyframes;
+        }
+        return false;
     }
 
-    // Selection Management
-    selectKeyframes(keyframeIds) {
-        // Clear existing selection
-        for (const keyframes of this.keyframes.values()) {
-            keyframes.forEach(kf => kf.selected = false);
+    // Keyframe Selection
+    selectKeyframe(keyframeId) {
+        const keyframe = this.getKeyframe(keyframeId);
+        if (keyframe) {
+            keyframe.selected = true;
         }
+    }
 
-        // Select specified keyframes
-        keyframeIds.forEach(id => {
-            const keyframe = this.getKeyframe(id);
-            if (keyframe) {
-                keyframe.selected = true;
-            }
-        });
+    deselectKeyframe(keyframeId) {
+        const keyframe = this.getKeyframe(keyframeId);
+        if (keyframe) {
+            keyframe.selected = false;
+        }
+    }
 
-        this.notifySelectionChanged();
+    clearKeyframeSelection() {
+        for (const keyframeArray of this.keyframes.values()) {
+            keyframeArray.forEach(kf => kf.selected = false);
+        }
     }
 
     getSelectedKeyframes() {
         const selected = [];
-        for (const keyframes of this.keyframes.values()) {
-            selected.push(...keyframes.filter(kf => kf.selected));
+        for (const keyframeArray of this.keyframes.values()) {
+            selected.push(...keyframeArray.filter(kf => kf.selected));
         }
         return selected;
     }
 
-    // Utility Functions
-    getRandomTrackColor() {
-        const colors = [
-            '#FF6B6B', '#4ECDC4', '#45B7D1', '#96CEB4', '#FECA57',
-            '#FF9FF3', '#54A0FF', '#5F27CD', '#00D2D3', '#FF9F43',
-            '#10AC84', '#EE5A24', '#0984E3', '#A29BFE', '#FD79A8'
-        ];
-        return colors[Math.floor(Math.random() * colors.length)];
+    // Animation Interpolation
+    getObjectStateAtTime(objectId, time) {
+        const keyframeArray = this.keyframes.get(objectId);
+        if (!keyframeArray || keyframeArray.length === 0) {
+            return null;
+        }
+        
+        // If time is before first keyframe, return first keyframe
+        if (time <= keyframeArray[0].time) {
+            return { ...keyframeArray[0].properties };
+        }
+        
+        // If time is after last keyframe, return last keyframe
+        if (time >= keyframeArray[keyframeArray.length - 1].time) {
+            return { ...keyframeArray[keyframeArray.length - 1].properties };
+        }
+        
+        // Find surrounding keyframes
+        let beforeKeyframe = null;
+        let afterKeyframe = null;
+        
+        for (let i = 0; i < keyframeArray.length - 1; i++) {
+            if (keyframeArray[i].time <= time && keyframeArray[i + 1].time >= time) {
+                beforeKeyframe = keyframeArray[i];
+                afterKeyframe = keyframeArray[i + 1];
+                break;
+            }
+        }
+        
+        if (!beforeKeyframe || !afterKeyframe) {
+            return { ...keyframeArray[0].properties };
+        }
+        
+        // Interpolate between keyframes
+        const duration = afterKeyframe.time - beforeKeyframe.time;
+        const progress = duration > 0 ? (time - beforeKeyframe.time) / duration : 0;
+        
+        return this.interpolateProperties(
+            beforeKeyframe.properties,
+            afterKeyframe.properties,
+            progress,
+            beforeKeyframe.easingType
+        );
+    }
+
+    interpolateProperties(startProps, endProps, progress, easingType = 'linear') {
+        const result = {};
+        const easedProgress = this.applyEasing(progress, easingType);
+        
+        // Interpolate numeric properties
+        for (const prop in startProps) {
+            const startValue = startProps[prop];
+            const endValue = endProps[prop];
+            
+            if (typeof startValue === 'number' && typeof endValue === 'number') {
+                result[prop] = startValue + (endValue - startValue) * easedProgress;
+            } else {
+                // For non-numeric properties, use step interpolation
+                result[prop] = easedProgress < 0.5 ? startValue : endValue;
+            }
+        }
+        
+        // Include properties that only exist in end state
+        for (const prop in endProps) {
+            if (!(prop in result)) {
+                result[prop] = endProps[prop];
+            }
+        }
+        
+        return result;
+    }
+
+    applyEasing(progress, easingType) {
+        switch (easingType) {
+            case 'linear':
+                return progress;
+                
+            case 'easeIn':
+                return progress * progress;
+                
+            case 'easeOut':
+                return 1 - Math.pow(1 - progress, 2);
+                
+            case 'easeInOut':
+                return progress < 0.5 
+                    ? 2 * progress * progress 
+                    : 1 - Math.pow(-2 * progress + 2, 2) / 2;
+                    
+            case 'bounce':
+                const n1 = 7.5625;
+                const d1 = 2.75;
+                
+                if (progress < 1 / d1) {
+                    return n1 * progress * progress;
+                } else if (progress < 2 / d1) {
+                    return n1 * (progress -= 1.5 / d1) * progress + 0.75;
+                } else if (progress < 2.5 / d1) {
+                    return n1 * (progress -= 2.25 / d1) * progress + 0.9375;
+                } else {
+                    return n1 * (progress -= 2.625 / d1) * progress + 0.984375;
+                }
+                
+            default:
+                return progress;
+        }
+    }
+
+    // Timeline Utilities
+    snapTimeToFrame(time) {
+        const frameTime = 1 / this.fps;
+        return Math.round(time / frameTime) * frameTime;
+    }
+
+    getFrameAtTime(time) {
+        return Math.round(time * this.fps);
+    }
+
+    getTimeAtFrame(frame) {
+        return frame / this.fps;
+    }
+
+    getTotalFrames() {
+        return Math.ceil(this.duration * this.fps);
+    }
+
+    // Timeline Markers and Regions
+    addMarker(time, label, color = '#ff0000') {
+        // Markers would be stored separately from keyframes
+        // This is a placeholder for future implementation
+        return {
+            id: this.generateId(),
+            time: time,
+            label: label,
+            color: color
+        };
+    }
+
+    // Copy and Paste Keyframes
+    copySelectedKeyframes() {
+        const selected = this.getSelectedKeyframes();
+        if (selected.length === 0) return null;
+        
+        // Store in a format that can be pasted
+        return {
+            keyframes: selected.map(kf => ({
+                ...kf,
+                id: null // Will be regenerated on paste
+            })),
+            relativeTime: Math.min(...selected.map(kf => kf.time))
+        };
+    }
+
+    pasteKeyframes(clipboardData, pasteTime) {
+        if (!clipboardData || !clipboardData.keyframes) return [];
+        
+        const pastedKeyframes = [];
+        const timeOffset = pasteTime - clipboardData.relativeTime;
+        
+        clipboardData.keyframes.forEach(kfData => {
+            const newTime = kfData.time + timeOffset;
+            if (newTime >= 0 && newTime <= this.duration) {
+                const keyframe = this.addKeyframe(
+                    kfData.objectId,
+                    newTime,
+                    kfData.properties
+                );
+                pastedKeyframes.push(keyframe);
+            }
+        });
+        
+        return pastedKeyframes;
+    }
+
+    // Bulk Operations
+    scaleKeyframes(keyframes, scaleFactor, pivotTime = 0) {
+        keyframes.forEach(kf => {
+            const newTime = pivotTime + (kf.time - pivotTime) * scaleFactor;
+            this.updateKeyframe(kf.id, { 
+                time: Math.max(0, Math.min(this.duration, newTime))
+            });
+        });
+    }
+
+    offsetKeyframes(keyframes, timeOffset) {
+        keyframes.forEach(kf => {
+            const newTime = kf.time + timeOffset;
+            this.updateKeyframe(kf.id, { 
+                time: Math.max(0, Math.min(this.duration, newTime))
+            });
+        });
     }
 
     // Export/Import
-    exportToJSON() {
-        const tracksArray = Array.from(this.tracks.entries()).map(([id, track]) => ({
-            objectId: id,
-            track,
-            keyframes: this.keyframes.get(track.id) || []
-        }));
-
-        return {
+    exportTimelineData() {
+        const data = {
             duration: this.duration,
             fps: this.fps,
-            currentTime: this.currentTime,
-            playbackSpeed: this.playbackSpeed,
-            loop: this.loop,
-            tracks: tracksArray
+            tracks: Array.from(this.tracks.entries()),
+            keyframes: Array.from(this.keyframes.entries())
         };
+        
+        return data;
     }
 
-    importFromJSON(data) {
+    importTimelineData(data) {
         this.duration = data.duration || 10;
         this.fps = data.fps || 30;
-        this.currentTime = data.currentTime || 0;
-        this.playbackSpeed = data.playbackSpeed || 1;
-        this.loop = data.loop || false;
-
+        this.currentTime = 0;
+        
+        // Clear existing data
         this.tracks.clear();
         this.keyframes.clear();
-
+        
+        // Import tracks
         if (data.tracks) {
-            data.tracks.forEach(({ objectId, track, keyframes }) => {
-                this.tracks.set(objectId, track);
-                this.keyframes.set(track.id, keyframes || []);
+            data.tracks.forEach(([trackId, track]) => {
+                this.tracks.set(trackId, track);
             });
         }
-
-        this.notifyTimelineImported();
-    }
-
-    // Event Notifications
-    notifyTrackCreated(track) {
-        this.dispatchEvent('trackCreated', { track });
-    }
-
-    notifyTrackDeleted(track) {
-        this.dispatchEvent('trackDeleted', { track });
-    }
-
-    notifyKeyframeAdded(keyframe) {
-        this.dispatchEvent('keyframeAdded', { keyframe });
-    }
-
-    notifyKeyframeUpdated(keyframe) {
-        this.dispatchEvent('keyframeUpdated', { keyframe });
-    }
-
-    notifyKeyframeDeleted(keyframe) {
-        this.dispatchEvent('keyframeDeleted', { keyframe });
-    }
-
-    notifySelectionChanged() {
-        this.dispatchEvent('selectionChanged', { selectedKeyframes: this.getSelectedKeyframes() });
-    }
-
-    notifyPlaybackStateChanged() {
-        this.dispatchEvent('playbackStateChanged', { 
-            isPlaying: this.isPlaying,
-            currentTime: this.currentTime 
-        });
-    }
-
-    notifyTimeChanged() {
-        this.dispatchEvent('timeChanged', { 
-            currentTime: this.currentTime,
-            formattedTime: this.formatTime(this.currentTime)
-        });
-    }
-
-    notifyTimelineImported() {
-        this.dispatchEvent('timelineImported', {});
-    }
-
-    dispatchEvent(type, data) {
-        if (typeof window !== 'undefined') {
-            const event = new CustomEvent(`timeline:${type}`, { detail: data });
-            window.dispatchEvent(event);
-        }
-    }
-
-    // Advanced Features
-    createAnimationClip(startTime, endTime, name = 'Animation Clip') {
-        const clip = {
-            id: `clip_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
-            name,
-            startTime: this.clampTime(startTime),
-            endTime: this.clampTime(endTime),
-            duration: endTime - startTime,
-            keyframes: [],
-            created: Date.now()
-        };
-
-        // Collect keyframes within the clip range
-        for (const keyframes of this.keyframes.values()) {
-            clip.keyframes.push(...keyframes.filter(kf => 
-                kf.time >= clip.startTime && kf.time <= clip.endTime
-            ));
-        }
-
-        return clip;
-    }
-
-    snapTimeToGrid(time, gridSize = 1) {
-        const gridTime = gridSize / this.fps;
-        return Math.round(time / gridTime) * gridTime;
-    }
-
-    getTimelineStats() {
-        const totalKeyframes = Array.from(this.keyframes.values())
-            .reduce((sum, keyframes) => sum + keyframes.length, 0);
         
-        const totalTracks = this.tracks.size;
-        const activeTracks = Array.from(this.tracks.values())
-            .filter(track => track.visible && !track.muted).length;
+        // Import keyframes
+        if (data.keyframes) {
+            data.keyframes.forEach(([objectId, keyframeArray]) => {
+                this.keyframes.set(objectId, keyframeArray);
+            });
+        }
+    }
 
+    // Clear Timeline
+    clear() {
+        this.tracks.clear();
+        this.keyframes.clear();
+        this.currentTime = 0;
+        
+        window.dispatchEvent(new CustomEvent('timeline:cleared'));
+    }
+
+    // Statistics
+    getStats() {
+        const totalKeyframes = this.getAllKeyframes().length;
+        const totalTracks = this.tracks.size;
+        const avgKeyframesPerTrack = totalTracks > 0 ? totalKeyframes / totalTracks : 0;
+        
         return {
             duration: this.duration,
             fps: this.fps,
-            totalFrames: this.timeToFrame(this.duration),
-            totalTracks,
-            activeTracks,
-            totalKeyframes,
-            averageKeyframesPerTrack: totalTracks > 0 ? totalKeyframes / totalTracks : 0
+            totalFrames: this.getTotalFrames(),
+            totalTracks: totalTracks,
+            totalKeyframes: totalKeyframes,
+            averageKeyframesPerTrack: Math.round(avgKeyframesPerTrack * 10) / 10
         };
+    }
+
+    // Utility Functions
+    generateTrackId() {
+        return 'track_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+    }
+
+    generateKeyframeId() {
+        return 'kf_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+    }
+
+    generateId() {
+        return Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+    }
+
+    generateTrackColor() {
+        const colors = [
+            '#FF6B6B', '#4ECDC4', '#45B7D1', '#96CEB4',
+            '#FFEAA7', '#DDA0DD', '#98D8C8', '#F7DC6F',
+            '#BB8FCE', '#85C1E9', '#F8C471', '#82E0AA'
+        ];
+        return colors[this.tracks.size % colors.length];
+    }
+
+    // Validation
+    validateKeyframe(keyframe) {
+        return keyframe &&
+               typeof keyframe.id === 'string' &&
+               typeof keyframe.objectId === 'string' &&
+               typeof keyframe.time === 'number' &&
+               keyframe.time >= 0 &&
+               keyframe.time <= this.duration &&
+               typeof keyframe.properties === 'object';
+    }
+
+    validateTrack(track) {
+        return track &&
+               typeof track.id === 'string' &&
+               typeof track.objectId === 'string' &&
+               typeof track.name === 'string';
     }
 }
 
