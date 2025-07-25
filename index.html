@@ -1,0 +1,370 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AnimationStudio - Create Amazing Animations</title>
+    <meta name="description" content="Professional animation tool built with HTML5, CSS3, and JavaScript. Create stunning animations with ease.">
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🎬</text></svg>">
+    
+    <!-- Stylesheets -->
+    <link rel="stylesheet" href="styles/main.css">
+    <link rel="stylesheet" href="styles/timeline.css">
+    <link rel="stylesheet" href="styles/controls.css">
+    
+    <!-- Loading styles -->
+    <style>
+        .loading-screen {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(135deg, #1a1a1a 0%, #2d2d2d 100%);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 9999;
+            color: white;
+        }
+        
+        .loading-content {
+            text-align: center;
+            max-width: 400px;
+        }
+        
+        .spinner {
+            width: 60px;
+            height: 60px;
+            border: 4px solid #333;
+            border-top: 4px solid #00d4ff;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 20px;
+        }
+        
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        
+        .empty-state {
+            color: #888;
+            font-style: italic;
+            padding: 20px;
+            text-align: center;
+            border: 2px dashed #333;
+            border-radius: 8px;
+            margin: 10px 0;
+        }
+        
+        .drag-over {
+            border: 2px dashed #00d4ff !important;
+            background: rgba(0, 212, 255, 0.1) !important;
+        }
+    </style>
+</head>
+<body>
+    <div id="app">
+        <!-- Header with main controls -->
+        <header class="header">
+            <div class="header-left">
+                <h1 class="app-title">
+                    <span class="app-icon">🎬</span>
+                    AnimationStudio
+                </h1>
+                <div class="project-controls">
+                    <button id="newProject" class="btn btn-primary" title="Create new project (Ctrl+N)">
+                        📄 New
+                    </button>
+                    <button id="loadProject" class="btn btn-secondary" title="Load existing project (Ctrl+O)">
+                        📂 Open
+                    </button>
+                    <button id="saveProject" class="btn btn-secondary" title="Save current project (Ctrl+S)">
+                        💾 Save
+                    </button>
+                </div>
+            </div>
+            
+            <div class="header-center">
+                <div class="playback-controls">
+                    <button id="rewindBtn" class="btn btn-icon" title="Rewind to start">⏮️</button>
+                    <button id="playBtn" class="btn btn-icon btn-play" title="Play animation (Space)">▶️</button>
+                    <button id="pauseBtn" class="btn btn-icon" title="Pause animation (Space)" style="display: none;">⏸️</button>
+                    <button id="stopBtn" class="btn btn-icon" title="Stop animation">⏹️</button>
+                    
+                    <div class="time-display">
+                        <span id="currentTime" class="time-value">0:00</span>
+                        <span class="time-separator">/</span>
+                        <span id="totalTime" class="time-value">0:10</span>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="header-right">
+                <div class="export-controls">
+                    <button id="exportVideo" class="btn btn-success" title="Export as WebM video (Ctrl+E)">
+                        🎥 Export Video
+                    </button>
+                    <button id="exportGif" class="btn btn-success" title="Export as animated GIF">
+                        🎞️ Export GIF
+                    </button>
+                </div>
+            </div>
+        </header>
+
+        <div class="main-container">
+            <!-- Left Panel - Assets and Scene -->
+            <aside class="left-panel">
+                <!-- Asset Management -->
+                <div class="panel-section">
+                    <h3 class="panel-title">
+                        <span class="panel-icon">🖼️</span>
+                        Assets
+                    </h3>
+                    <div class="asset-upload">
+                        <input type="file" id="assetUpload" multiple accept="image/*,video/*" style="display: none;">
+                        <button id="uploadBtn" class="btn btn-outline btn-upload">
+                            <span class="upload-icon">📁</span>
+                            Upload Assets
+                        </button>
+                        <p class="upload-hint">Drag files here or click to browse</p>
+                    </div>
+                    <div id="assetList" class="asset-list">
+                        <p class="empty-state">No assets uploaded yet. Click "Upload Assets" to get started!</p>
+                    </div>
+                </div>
+                
+                <!-- Scene Objects -->
+                <div class="panel-section">
+                    <h3 class="panel-title">
+                        <span class="panel-icon">🎭</span>
+                        Scene Objects
+                    </h3>
+                    <div id="sceneObjects" class="scene-objects">
+                        <p class="empty-state">No objects in scene. Drag assets to canvas to add objects!</p>
+                    </div>
+                </div>
+            </aside>
+
+            <!-- Center - Canvas Area -->
+            <main class="canvas-container">
+                <!-- Canvas Toolbar -->
+                <div class="canvas-toolbar">
+                    <div class="tool-group">
+                        <button id="selectTool" class="tool-btn active" data-tool="select" title="Select tool">
+                            <span class="tool-icon">🖱️</span>
+                            Select
+                        </button>
+                        <button id="moveTool" class="tool-btn" data-tool="move" title="Move tool">
+                            <span class="tool-icon">✋</span>
+                            Move
+                        </button>
+                        <button id="rotateTool" class="tool-btn" data-tool="rotate" title="Rotate tool">
+                            <span class="tool-icon">🔄</span>
+                            Rotate
+                        </button>
+                        <button id="scaleTool" class="tool-btn" data-tool="scale" title="Scale tool">
+                            <span class="tool-icon">📏</span>
+                            Scale
+                        </button>
+                    </div>
+                    
+                    <div class="canvas-info">
+                        <span class="canvas-size">1920 × 1080</span>
+                        <span class="canvas-zoom">100%</span>
+                    </div>
+                </div>
+                
+                <!-- Canvas Area with drop zone -->
+                <div class="canvas-wrapper" id="canvasWrapper">
+                    <canvas id="animationCanvas" class="animation-canvas"></canvas>
+                    
+                    <!-- Canvas overlay for guides and helpers -->
+                    <div class="canvas-overlay">
+                        <div class="drop-zone-message" style="display: none;">
+                            <div class="drop-zone-content">
+                                <span class="drop-icon">📥</span>
+                                <p>Drop images here to add to canvas</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Canvas Footer Info -->
+                <div class="canvas-footer">
+                    <div class="canvas-stats">
+                        <span id="objectCount">Objects: 0</span>
+                        <span id="selectedCount">Selected: 0</span>
+                        <span id="fps">FPS: 30</span>
+                    </div>
+                    <div class="canvas-help">
+                        <span class="help-text">💡 Tip: Use Spacebar to play/pause, drag assets from left panel</span>
+                    </div>
+                </div>
+            </main>
+
+            <!-- Right Panel - Properties -->
+            <aside class="right-panel">
+                <!-- Object Properties -->
+                <div class="panel-section">
+                    <h3 class="panel-title">
+                        <span class="panel-icon">⚙️</span>
+                        Properties
+                    </h3>
+                    <div id="objectProperties" class="object-properties">
+                        <p class="empty-state">Select an object to edit properties</p>
+                    </div>
+                </div>
+                
+                <!-- Animation Controls -->
+                <div class="panel-section">
+                    <h3 class="panel-title">
+                        <span class="panel-icon">🎯</span>
+                        Animation
+                    </h3>
+                    <div class="animation-controls">
+                        <button id="addKeyframe" class="btn btn-primary btn-block">
+                            ➕ Add Keyframe
+                        </button>
+                        <button id="deleteKeyframe" class="btn btn-danger btn-block">
+                            ❌ Delete Keyframe
+                        </button>
+                        
+                        <div class="keyframe-info">
+                            <label>Current Time: <span id="currentKeyframeTime">0.00s</span></label>
+                        </div>
+                    </div>
+                </div>
+            </aside>
+        </div>
+
+        <!-- Timeline Panel -->
+        <div class="timeline-panel">
+            <div class="timeline-header">
+                <h3 class="timeline-title">
+                    <span class="panel-icon">📊</span>
+                    Timeline
+                </h3>
+                
+                <div class="timeline-settings">
+                    <label class="timeline-setting">
+                        Duration: 
+                        <input type="number" id="timelineDuration" min="1" max="300" value="10" step="0.1">s
+                    </label>
+                    <label class="timeline-setting">
+                        FPS: 
+                        <select id="timelineFPS">
+                            <option value="24">24</option>
+                            <option value="30" selected>30</option>
+                            <option value="60">60</option>
+                        </select>
+                    </label>
+                </div>
+            </div>
+            
+            <div id="timeline" class="timeline">
+                <div class="timeline-placeholder">
+                    <p class="empty-state">Timeline will appear here when you add objects and keyframes</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal for Export Progress -->
+    <div id="exportModal" class="modal" style="display: none;">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>🎬 Exporting Animation</h3>
+            </div>
+            <div class="modal-body">
+                <div class="progress-container">
+                    <div class="progress-bar">
+                        <div id="exportProgress" class="progress-fill"></div>
+                    </div>
+                    <p id="exportStatus" class="export-status">Preparing export...</p>
+                </div>
+                <div class="export-info">
+                    <p>This may take a few moments depending on your animation length and complexity.</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Welcome Guide Modal -->
+    <div id="welcomeModal" class="modal welcome-modal" style="display: none;">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>🎉 Welcome to AnimationStudio!</h2>
+                <button class="modal-close" onclick="document.getElementById('welcomeModal').style.display = 'none'">✕</button>
+            </div>
+            <div class="modal-body">
+                <div class="welcome-steps">
+                    <div class="welcome-step">
+                        <span class="step-number">1</span>
+                        <div class="step-content">
+                            <h4>Upload Assets</h4>
+                            <p>Click "Upload Assets" or drag images into the left panel</p>
+                        </div>
+                    </div>
+                    <div class="welcome-step">
+                        <span class="step-number">2</span>
+                        <div class="step-content">
+                            <h4>Add to Canvas</h4>
+                            <p>Drag assets from the panel to the canvas or double-click them</p>
+                        </div>
+                    </div>
+                    <div class="welcome-step">
+                        <span class="step-number">3</span>
+                        <div class="step-content">
+                            <h4>Create Animation</h4>
+                            <p>Move objects and click "Add Keyframe" to create animations</p>
+                        </div>
+                    </div>
+                    <div class="welcome-step">
+                        <span class="step-number">4</span>
+                        <div class="step-content">
+                            <h4>Export & Share</h4>
+                            <p>Export as video or save your project to continue later</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="welcome-actions">
+                    <button class="btn btn-primary" onclick="document.getElementById('welcomeModal').style.display = 'none'">
+                        Get Started! 🚀
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Core Engine Scripts -->
+    <script src="js/core/canvas-engine.js"></script>
+    <script src="js/core/timeline.js"></script>
+    <script src="js/core/playback.js"></script>
+    <script src="js/core/asset-loader.js"></script>
+    <script src="js/core/project-exporter.js"></script>
+    
+    <!-- Main Application -->
+    <script src="js/app.js"></script>
+    
+    <!-- Error handling -->
+    <script>
+        // Global error handler
+        window.addEventListener('error', (e) => {
+            console.error('Global error:', e.error);
+            if (window.app && window.app.showError) {
+                window.app.showError('An unexpected error occurred: ' + e.error.message);
+            }
+        });
+        
+        // Unhandled promise rejection handler
+        window.addEventListener('unhandledrejection', (e) => {
+            console.error('Unhandled promise rejection:', e.reason);
+            if (window.app && window.app.showError) {
+                window.app.showError('An async error occurred: ' + e.reason);
+            }
+        });
+    </script>
+</body>
+</html>

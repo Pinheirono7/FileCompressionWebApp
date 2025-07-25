@@ -1,0 +1,495 @@
+/* Timeline Specific Styles */
+.timeline {
+    flex: 1;
+    background: #333;
+    position: relative;
+    overflow: auto;
+    user-select: none;
+}
+
+.timeline-content {
+    display: flex;
+    min-height: 100%;
+}
+
+.timeline-tracks {
+    flex: 1;
+    position: relative;
+    min-width: 600px;
+}
+
+.timeline-ruler {
+    height: 30px;
+    background: #2a2a2a;
+    border-bottom: 1px solid #444;
+    position: relative;
+    overflow: hidden;
+}
+
+.timeline-ruler-marks {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+}
+
+.ruler-mark {
+    position: absolute;
+    top: 0;
+    width: 1px;
+    background: #555;
+    font-size: 10px;
+    color: #999;
+}
+
+.ruler-mark.major {
+    height: 100%;
+    background: #666;
+}
+
+.ruler-mark.minor {
+    height: 50%;
+    background: #555;
+}
+
+.ruler-mark .time-label {
+    position: absolute;
+    top: 15px;
+    left: 3px;
+    white-space: nowrap;
+    font-family: 'Courier New', monospace;
+}
+
+/* Playhead */
+.timeline-playhead {
+    position: absolute;
+    top: 0;
+    width: 2px;
+    height: 100%;
+    background: #ff4444;
+    z-index: 100;
+    pointer-events: none;
+}
+
+.playhead-handle {
+    position: absolute;
+    top: -5px;
+    left: -6px;
+    width: 14px;
+    height: 14px;
+    background: #ff4444;
+    border-radius: 50%;
+    cursor: grab;
+    pointer-events: all;
+}
+
+.playhead-handle:active {
+    cursor: grabbing;
+}
+
+.playhead-line {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 2px;
+    height: 100%;
+    background: #ff4444;
+    opacity: 0.8;
+}
+
+/* Timeline Tracks */
+.timeline-track-list {
+    width: 200px;
+    background: #2a2a2a;
+    border-right: 1px solid #444;
+    overflow-y: auto;
+}
+
+.timeline-track-header {
+    height: 40px;
+    display: flex;
+    align-items: center;
+    padding: 0 10px;
+    border-bottom: 1px solid #444;
+    background: #333;
+    color: #ccc;
+    font-size: 12px;
+    font-weight: 500;
+}
+
+.timeline-track-item {
+    height: 60px;
+    border-bottom: 1px solid #444;
+    display: flex;
+    align-items: center;
+    padding: 0 10px;
+    background: #2a2a2a;
+    transition: background 0.2s ease;
+}
+
+.timeline-track-item:hover {
+    background: #333;
+}
+
+.timeline-track-item.selected {
+    background: #00d4ff;
+    color: #1a1a1a;
+}
+
+.timeline-track-info {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+}
+
+.track-name {
+    font-size: 13px;
+    font-weight: 500;
+    color: #fff;
+}
+
+.track-type {
+    font-size: 11px;
+    color: #999;
+}
+
+.track-controls {
+    display: flex;
+    gap: 5px;
+}
+
+.track-control-btn {
+    width: 20px;
+    height: 20px;
+    border: none;
+    border-radius: 3px;
+    background: #555;
+    color: #ccc;
+    font-size: 10px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.track-control-btn:hover {
+    background: #666;
+}
+
+.track-control-btn.active {
+    background: #00d4ff;
+    color: #1a1a1a;
+}
+
+/* Track Content Area */
+.timeline-track-content {
+    flex: 1;
+    position: relative;
+    overflow: hidden;
+}
+
+.timeline-track-row {
+    height: 60px;
+    border-bottom: 1px solid #444;
+    position: relative;
+    background: #333;
+}
+
+.timeline-track-row:nth-child(even) {
+    background: #2e2e2e;
+}
+
+.timeline-track-row:hover {
+    background: #3a3a3a;
+}
+
+/* Grid Lines */
+.timeline-grid {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+}
+
+.grid-line {
+    position: absolute;
+    top: 0;
+    width: 1px;
+    height: 100%;
+    background: #444;
+    opacity: 0.3;
+}
+
+.grid-line.major {
+    opacity: 0.5;
+}
+
+/* Keyframes */
+.keyframe {
+    position: absolute;
+    width: 12px;
+    height: 12px;
+    background: #00d4ff;
+    border: 2px solid #fff;
+    border-radius: 50%;
+    cursor: grab;
+    z-index: 50;
+    top: 50%;
+    transform: translateY(-50%);
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+}
+
+.keyframe:hover {
+    background: #00b8e6;
+    transform: translateY(-50%) scale(1.2);
+}
+
+.keyframe:active {
+    cursor: grabbing;
+}
+
+.keyframe.selected {
+    background: #ff4444;
+    border-color: #ff4444;
+    box-shadow: 0 0 10px rgba(255, 68, 68, 0.5);
+}
+
+.keyframe.easing-in {
+    background: #28a745;
+}
+
+.keyframe.easing-out {
+    background: #ffc107;
+}
+
+.keyframe.easing-both {
+    background: #6f42c1;
+}
+
+/* Animation Clips */
+.animation-clip {
+    position: absolute;
+    height: 40px;
+    background: linear-gradient(135deg, #00d4ff, #0099cc);
+    border-radius: 6px;
+    top: 50%;
+    transform: translateY(-50%);
+    cursor: grab;
+    border: 1px solid #00b8e6;
+    display: flex;
+    align-items: center;
+    padding: 0 8px;
+    min-width: 20px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+}
+
+.animation-clip:hover {
+    background: linear-gradient(135deg, #00b8e6, #007aa3);
+    transform: translateY(-50%) translateZ(0) scale(1.02);
+}
+
+.animation-clip:active {
+    cursor: grabbing;
+}
+
+.animation-clip.selected {
+    border-color: #ff4444;
+    box-shadow: 0 0 10px rgba(255, 68, 68, 0.3);
+}
+
+.clip-content {
+    flex: 1;
+    overflow: hidden;
+    color: #fff;
+    font-size: 11px;
+    font-weight: 500;
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
+}
+
+.clip-handles {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    width: 8px;
+    background: rgba(255, 255, 255, 0.2);
+    cursor: ew-resize;
+    opacity: 0;
+    transition: opacity 0.2s ease;
+}
+
+.animation-clip:hover .clip-handles {
+    opacity: 1;
+}
+
+.clip-handle-left {
+    left: 0;
+    border-radius: 6px 0 0 6px;
+}
+
+.clip-handle-right {
+    right: 0;
+    border-radius: 0 6px 6px 0;
+}
+
+/* Timeline Zoom Controls */
+.timeline-zoom {
+    position: absolute;
+    bottom: 10px;
+    right: 10px;
+    background: #2a2a2a;
+    border: 1px solid #444;
+    border-radius: 6px;
+    padding: 5px;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    z-index: 1000;
+}
+
+.timeline-zoom button {
+    width: 24px;
+    height: 24px;
+    border: none;
+    background: #404040;
+    color: #ccc;
+    border-radius: 3px;
+    cursor: pointer;
+    font-size: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.timeline-zoom button:hover {
+    background: #555;
+    color: #fff;
+}
+
+.timeline-zoom input[type="range"] {
+    width: 80px;
+    height: 20px;
+}
+
+/* Time Cursor */
+.timeline-cursor {
+    position: absolute;
+    top: 0;
+    width: 1px;
+    height: 100%;
+    background: #fff;
+    opacity: 0.6;
+    pointer-events: none;
+    z-index: 75;
+}
+
+/* Selection Rectangle */
+.timeline-selection {
+    position: absolute;
+    border: 1px dashed #00d4ff;
+    background: rgba(0, 212, 255, 0.1);
+    pointer-events: none;
+    z-index: 25;
+}
+
+/* Context Menu */
+.timeline-context-menu {
+    position: fixed;
+    background: #2a2a2a;
+    border: 1px solid #444;
+    border-radius: 6px;
+    padding: 5px 0;
+    min-width: 150px;
+    z-index: 10000;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+}
+
+.context-menu-item {
+    padding: 8px 15px;
+    cursor: pointer;
+    font-size: 13px;
+    color: #ccc;
+    transition: background 0.2s ease;
+}
+
+.context-menu-item:hover {
+    background: #404040;
+    color: #fff;
+}
+
+.context-menu-item.disabled {
+    color: #666;
+    cursor: not-allowed;
+}
+
+.context-menu-item.disabled:hover {
+    background: transparent;
+    color: #666;
+}
+
+.context-menu-separator {
+    height: 1px;
+    background: #444;
+    margin: 5px 0;
+}
+
+/* Timeline Loading State */
+.timeline-loading {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    background: #2a2a2a;
+    border: 1px solid #444;
+    border-radius: 8px;
+    padding: 20px;
+    text-align: center;
+    color: #ccc;
+    z-index: 1000;
+}
+
+.timeline-loading .spinner {
+    width: 30px;
+    height: 30px;
+    border: 3px solid #444;
+    border-top-color: #00d4ff;
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+    margin: 0 auto 10px;
+}
+
+@keyframes spin {
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+/* Responsive Timeline */
+@media (max-width: 768px) {
+    .timeline-track-list {
+        width: 150px;
+    }
+    
+    .timeline-zoom {
+        bottom: 5px;
+        right: 5px;
+        padding: 3px;
+    }
+    
+    .timeline-zoom input[type="range"] {
+        width: 60px;
+    }
+    
+    .keyframe {
+        width: 10px;
+        height: 10px;
+    }
+    
+    .animation-clip {
+        height: 30px;
+        padding: 0 6px;
+    }
+}

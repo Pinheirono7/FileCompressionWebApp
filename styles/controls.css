@@ -1,0 +1,569 @@
+/* Control-specific Styles */
+
+/* Range Sliders */
+input[type="range"] {
+    -webkit-appearance: none;
+    appearance: none;
+    background: transparent;
+    cursor: pointer;
+    height: 6px;
+    outline: none;
+}
+
+/* Range Track */
+input[type="range"]::-webkit-slider-track {
+    background: #555;
+    height: 6px;
+    border-radius: 3px;
+}
+
+input[type="range"]::-moz-range-track {
+    background: #555;
+    height: 6px;
+    border-radius: 3px;
+    border: none;
+}
+
+/* Range Thumb */
+input[type="range"]::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    background: #00d4ff;
+    height: 18px;
+    width: 18px;
+    border-radius: 50%;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+}
+
+input[type="range"]::-moz-range-thumb {
+    background: #00d4ff;
+    height: 18px;
+    width: 18px;
+    border-radius: 50%;
+    cursor: pointer;
+    border: none;
+    transition: all 0.2s ease;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+}
+
+input[type="range"]::-webkit-slider-thumb:hover {
+    background: #00b8e6;
+    transform: scale(1.1);
+}
+
+input[type="range"]::-moz-range-thumb:hover {
+    background: #00b8e6;
+    transform: scale(1.1);
+}
+
+/* Number Inputs */
+input[type="number"] {
+    -webkit-appearance: textfield;
+    -moz-appearance: textfield;
+    appearance: textfield;
+    background: #404040;
+    border: 1px solid #555;
+    border-radius: 4px;
+    color: white;
+    padding: 6px 8px;
+    font-size: 13px;
+    width: 80px;
+    transition: border-color 0.2s ease;
+}
+
+input[type="number"]:focus {
+    outline: none;
+    border-color: #00d4ff;
+    box-shadow: 0 0 0 2px rgba(0, 212, 255, 0.2);
+}
+
+input[type="number"]::-webkit-outer-spin-button,
+input[type="number"]::-webkit-inner-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+}
+
+input[type="number"][type="number"] {
+    -moz-appearance: textfield;
+}
+
+/* Text Inputs */
+input[type="text"], input[type="email"], input[type="password"] {
+    background: #404040;
+    border: 1px solid #555;
+    border-radius: 4px;
+    color: white;
+    padding: 8px 12px;
+    font-size: 14px;
+    transition: all 0.2s ease;
+}
+
+input[type="text"]:focus, 
+input[type="email"]:focus, 
+input[type="password"]:focus {
+    outline: none;
+    border-color: #00d4ff;
+    box-shadow: 0 0 0 2px rgba(0, 212, 255, 0.2);
+    background: #454545;
+}
+
+/* Select Dropdowns */
+select {
+    background: #404040;
+    border: 1px solid #555;
+    border-radius: 4px;
+    color: white;
+    padding: 6px 8px;
+    font-size: 13px;
+    cursor: pointer;
+    transition: border-color 0.2s ease;
+    -webkit-appearance: none;
+    -moz-appearance: none;
+    appearance: none;
+    background-image: url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23ccc' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3e%3cpolyline points='6,9 12,15 18,9'%3e%3c/polyline%3e%3c/svg%3e");
+    background-repeat: no-repeat;
+    background-position: right 8px center;
+    background-size: 16px;
+    padding-right: 32px;
+}
+
+select:focus {
+    outline: none;
+    border-color: #00d4ff;
+    box-shadow: 0 0 0 2px rgba(0, 212, 255, 0.2);
+}
+
+select option {
+    background: #404040;
+    color: white;
+    padding: 8px;
+}
+
+/* Checkboxes */
+input[type="checkbox"] {
+    -webkit-appearance: none;
+    -moz-appearance: none;
+    appearance: none;
+    width: 18px;
+    height: 18px;
+    background: #404040;
+    border: 2px solid #555;
+    border-radius: 3px;
+    cursor: pointer;
+    position: relative;
+    transition: all 0.2s ease;
+}
+
+input[type="checkbox"]:checked {
+    background: #00d4ff;
+    border-color: #00d4ff;
+}
+
+input[type="checkbox"]:checked::before {
+    content: '✓';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    color: white;
+    font-size: 12px;
+    font-weight: bold;
+}
+
+input[type="checkbox"]:hover {
+    border-color: #00d4ff;
+}
+
+input[type="checkbox"]:focus {
+    outline: none;
+    box-shadow: 0 0 0 2px rgba(0, 212, 255, 0.2);
+}
+
+/* Radio Buttons */
+input[type="radio"] {
+    -webkit-appearance: none;
+    -moz-appearance: none;
+    appearance: none;
+    width: 18px;
+    height: 18px;
+    background: #404040;
+    border: 2px solid #555;
+    border-radius: 50%;
+    cursor: pointer;
+    position: relative;
+    transition: all 0.2s ease;
+}
+
+input[type="radio"]:checked {
+    border-color: #00d4ff;
+}
+
+input[type="radio"]:checked::before {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 8px;
+    height: 8px;
+    background: #00d4ff;
+    border-radius: 50%;
+}
+
+input[type="radio"]:hover {
+    border-color: #00d4ff;
+}
+
+input[type="radio"]:focus {
+    outline: none;
+    box-shadow: 0 0 0 2px rgba(0, 212, 255, 0.2);
+}
+
+/* Toggle Switches */
+.toggle-switch {
+    position: relative;
+    display: inline-block;
+    width: 44px;
+    height: 24px;
+}
+
+.toggle-switch input {
+    opacity: 0;
+    width: 0;
+    height: 0;
+}
+
+.toggle-slider {
+    position: absolute;
+    cursor: pointer;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: #555;
+    transition: .4s;
+    border-radius: 24px;
+}
+
+.toggle-slider:before {
+    position: absolute;
+    content: "";
+    height: 18px;
+    width: 18px;
+    left: 3px;
+    bottom: 3px;
+    background-color: white;
+    transition: .4s;
+    border-radius: 50%;
+}
+
+input:checked + .toggle-slider {
+    background-color: #00d4ff;
+}
+
+input:checked + .toggle-slider:before {
+    transform: translateX(20px);
+}
+
+.toggle-slider:hover {
+    box-shadow: 0 0 0 2px rgba(0, 212, 255, 0.2);
+}
+
+/* Color Picker */
+input[type="color"] {
+    -webkit-appearance: none;
+    -moz-appearance: none;
+    appearance: none;
+    width: 40px;
+    height: 30px;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    background: transparent;
+    transition: all 0.2s ease;
+}
+
+input[type="color"]::-webkit-color-swatch-wrapper {
+    padding: 0;
+    border: 2px solid #555;
+    border-radius: 4px;
+}
+
+input[type="color"]::-webkit-color-swatch {
+    border: none;
+    border-radius: 2px;
+}
+
+input[type="color"]::-moz-color-swatch {
+    border: 2px solid #555;
+    border-radius: 4px;
+}
+
+input[type="color"]:hover::-webkit-color-swatch-wrapper,
+input[type="color"]:hover::-moz-color-swatch {
+    border-color: #00d4ff;
+}
+
+input[type="color"]:focus {
+    outline: none;
+    box-shadow: 0 0 0 2px rgba(0, 212, 255, 0.2);
+}
+
+/* File Input */
+input[type="file"] {
+    background: #404040;
+    border: 2px dashed #555;
+    border-radius: 8px;
+    color: white;
+    padding: 20px;
+    text-align: center;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    width: 100%;
+}
+
+input[type="file"]:hover {
+    border-color: #00d4ff;
+    background: #454545;
+}
+
+input[type="file"]:focus {
+    outline: none;
+    border-color: #00d4ff;
+    box-shadow: 0 0 0 2px rgba(0, 212, 255, 0.2);
+}
+
+/* Button Groups */
+.btn-group {
+    display: flex;
+    border-radius: 6px;
+    overflow: hidden;
+}
+
+.btn-group .btn {
+    border-radius: 0;
+    border-right: 1px solid #555;
+    margin: 0;
+}
+
+.btn-group .btn:first-child {
+    border-radius: 6px 0 0 6px;
+}
+
+.btn-group .btn:last-child {
+    border-radius: 0 6px 6px 0;
+    border-right: none;
+}
+
+.btn-group .btn:only-child {
+    border-radius: 6px;
+}
+
+.btn-group .btn.active {
+    background: #00d4ff;
+    color: #1a1a1a;
+}
+
+/* Tabs */
+.tabs {
+    display: flex;
+    background: #2a2a2a;
+    border-bottom: 1px solid #444;
+    overflow-x: auto;
+}
+
+.tab {
+    padding: 12px 20px;
+    cursor: pointer;
+    background: transparent;
+    border: none;
+    color: #ccc;
+    font-size: 14px;
+    transition: all 0.2s ease;
+    white-space: nowrap;
+    border-bottom: 2px solid transparent;
+}
+
+.tab:hover {
+    background: #333;
+    color: #fff;
+}
+
+.tab.active {
+    color: #00d4ff;
+    border-bottom-color: #00d4ff;
+    background: #333;
+}
+
+/* Progress Bars */
+.progress {
+    background: #404040;
+    border-radius: 10px;
+    overflow: hidden;
+    height: 8px;
+    width: 100%;
+}
+
+.progress-bar {
+    background: linear-gradient(90deg, #00d4ff, #0099cc);
+    height: 100%;
+    transition: width 0.3s ease;
+    border-radius: 10px;
+}
+
+.progress.large {
+    height: 20px;
+}
+
+.progress.large .progress-bar {
+    line-height: 20px;
+    text-align: center;
+    color: white;
+    font-size: 12px;
+    font-weight: 500;
+}
+
+/* Tooltips */
+.tooltip {
+    position: relative;
+    cursor: help;
+}
+
+.tooltip::before {
+    content: attr(data-tooltip);
+    position: absolute;
+    bottom: 125%;
+    left: 50%;
+    transform: translateX(-50%);
+    background: #1a1a1a;
+    color: white;
+    padding: 8px 12px;
+    border-radius: 6px;
+    font-size: 12px;
+    white-space: nowrap;
+    opacity: 0;
+    visibility: hidden;
+    transition: all 0.2s ease;
+    z-index: 1000;
+    border: 1px solid #444;
+}
+
+.tooltip::after {
+    content: '';
+    position: absolute;
+    bottom: 119%;
+    left: 50%;
+    transform: translateX(-50%);
+    border: 5px solid transparent;
+    border-top-color: #1a1a1a;
+    opacity: 0;
+    visibility: hidden;
+    transition: all 0.2s ease;
+}
+
+.tooltip:hover::before,
+.tooltip:hover::after {
+    opacity: 1;
+    visibility: visible;
+}
+
+/* Spinners */
+.spinner {
+    width: 20px;
+    height: 20px;
+    border: 2px solid #555;
+    border-top-color: #00d4ff;
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+}
+
+.spinner.large {
+    width: 40px;
+    height: 40px;
+    border-width: 3px;
+}
+
+@keyframes spin {
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+/* Badges */
+.badge {
+    display: inline-block;
+    padding: 2px 8px;
+    background: #555;
+    color: white;
+    border-radius: 12px;
+    font-size: 11px;
+    font-weight: 500;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.badge.success {
+    background: #28a745;
+}
+
+.badge.warning {
+    background: #ffc107;
+    color: #1a1a1a;
+}
+
+.badge.danger {
+    background: #dc3545;
+}
+
+.badge.info {
+    background: #00d4ff;
+    color: #1a1a1a;
+}
+
+/* Dividers */
+.divider {
+    height: 1px;
+    background: #444;
+    margin: 20px 0;
+}
+
+.divider.vertical {
+    width: 1px;
+    height: auto;
+    margin: 0 20px;
+}
+
+/* Form Groups */
+.form-group {
+    margin-bottom: 20px;
+}
+
+.form-group label {
+    display: block;
+    margin-bottom: 8px;
+    color: #ccc;
+    font-size: 14px;
+    font-weight: 500;
+}
+
+.form-group .form-control {
+    width: 100%;
+}
+
+.form-group.inline {
+    display: flex;
+    align-items: center;
+    margin-bottom: 15px;
+}
+
+.form-group.inline label {
+    margin-bottom: 0;
+    margin-right: 15px;
+    min-width: 100px;
+}
+
+.form-group.inline .form-control {
+    flex: 1;
+}
